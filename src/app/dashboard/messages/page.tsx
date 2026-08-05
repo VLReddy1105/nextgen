@@ -1,0 +1,3 @@
+import { MessageSquareText } from "lucide-react";
+import { DashboardPlaceholder } from "@/components/dashboard/DashboardPlaceholder";
+export default function Page() { return <DashboardPlaceholder eyebrow="Messages" title="Conversations with context." description="Direct messages will stay connected to the role, project, application, or community that started them." emptyTitle="No active conversations" emptyDescription="Messaging requires authenticated profiles and will be connected in the Supabase implementation phase." icon={MessageSquareText} action="Discover people" href="/dashboard/discover" />; }

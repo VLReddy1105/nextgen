@@ -1,0 +1,3 @@
+import { CalendarDays } from "lucide-react";
+interface EventCardProps { date: string; title: string; meta: string; }
+export function EventCard({ date, title, meta }: EventCardProps) { return <div className="flex items-start gap-3 border-b border-slate-100 py-4 last:border-0"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-700"><CalendarDays aria-hidden="true" className="size-[18px]" /></span><div><p className="text-[13px] font-semibold text-blue-700">{date}</p><p className="mt-1 text-[15px] font-semibold text-slate-900">{title}</p><p className="mt-1 text-[14px] text-slate-500">{meta}</p></div></div>; }

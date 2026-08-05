@@ -1,0 +1,3 @@
+import { FileCheck2 } from "lucide-react";
+import { DashboardPlaceholder } from "@/components/dashboard/DashboardPlaceholder";
+export default function Page() { return <DashboardPlaceholder eyebrow="Applications" title="Keep every application clear." description="Track each opportunity from submission through decisions without losing the conversation around it." emptyTitle="Real applications will appear here" emptyDescription="The sample overview demonstrates the status model. Persistence and application actions will activate with the backend." icon={FileCheck2} action="Explore opportunities" href="/dashboard/opportunities" />; }

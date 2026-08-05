@@ -1,0 +1,4 @@
+import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
+interface EmptyStateProps { title: string; description: string; icon: LucideIcon; action: string; href: string; }
+export function EmptyState({ title, description, icon: Icon, action, href }: EmptyStateProps) { return <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center"><span className="mx-auto grid size-12 place-items-center rounded-2xl bg-slate-100 text-slate-700"><Icon aria-hidden="true" className="size-5" /></span><h2 className="mt-5 text-xl font-semibold text-slate-950">{title}</h2><p className="mx-auto mt-2 max-w-lg text-[15px] leading-7 text-slate-600">{description}</p><Link href={href} className="mt-6 inline-flex min-h-11 items-center rounded-full bg-blue-600 px-5 text-[15px] font-semibold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-600/20">{action}</Link></div>; }

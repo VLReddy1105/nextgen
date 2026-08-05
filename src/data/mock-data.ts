@@ -1,0 +1,121 @@
+import type { Community, CommunityEvent, Opportunity } from "@/types";
+
+export const opportunities: Opportunity[] = [
+  {
+    id: "ai-research-assistant",
+    title: "AI Research Assistant",
+    organization: "BTU Cottbus-Senftenberg",
+    monogram: "BTU",
+    location: "Cottbus",
+    workMode: "Hybrid",
+    type: "Research · HiWi",
+    skills: ["Python", "Machine Learning"],
+    deadline: "18 Aug",
+  },
+  {
+    id: "product-design-intern",
+    title: "Product Design Intern",
+    organization: "NextGen Labs",
+    monogram: "NG",
+    location: "Berlin",
+    workMode: "Remote friendly",
+    type: "Internship",
+    skills: ["Figma", "User research"],
+    deadline: "24 Aug",
+  },
+  {
+    id: "founding-software-engineer",
+    title: "Founding Software Engineer",
+    organization: "Early-stage climate startup",
+    monogram: "EC",
+    location: "Europe",
+    workMode: "Remote",
+    type: "Startup role",
+    skills: ["TypeScript", "Product thinking"],
+    deadline: "Rolling",
+  },
+];
+
+export const communities: Community[] = [
+  {
+    name: "AI and Machine Learning",
+    description: "Practical discussions, research exchange, and project teams.",
+    members: "Growing community",
+    activity: "Active today",
+    tags: ["AI", "Research"],
+  },
+  {
+    name: "Startup Builders Europe",
+    description: "A working room for founders, early hires, and collaborators.",
+    members: "European network",
+    activity: "12 new discussions",
+    tags: ["Startups", "Founders"],
+  },
+  {
+    name: "International Students in Germany",
+    description: "Navigate study, work, and community life with peers.",
+    members: "Across Germany",
+    activity: "Event this week",
+    tags: ["Students", "Germany"],
+  },
+  {
+    name: "Product and Design",
+    description: "Critiques, portfolio feedback, and thoughtful product craft.",
+    members: "Open community",
+    activity: "Portfolio review open",
+    tags: ["Design", "Product"],
+  },
+  {
+    name: "Research Collaborations",
+    description: "Find interdisciplinary research partners and open calls.",
+    members: "Academic network",
+    activity: "4 open calls",
+    tags: ["Research", "Projects"],
+  },
+  {
+    name: "Women in Technology",
+    description: "Peer support, mentorship, and practical career conversations.",
+    members: "International network",
+    activity: "Mentor session soon",
+    tags: ["Technology", "Mentorship"],
+  },
+];
+
+export const events: CommunityEvent[] = [
+  {
+    date: "14",
+    month: "SEP",
+    time: "18:30 CET",
+    format: "In person",
+    organizer: "Startup Builders Europe",
+    title: "Founder networking session",
+    location: "Berlin Mitte",
+  },
+  {
+    date: "19",
+    month: "SEP",
+    time: "16:00 CET",
+    format: "Online",
+    organizer: "NextGen Career Circle",
+    title: "CV and HiWi workshop",
+    location: "Online room",
+  },
+  {
+    date: "25",
+    month: "SEP",
+    time: "17:30 CET",
+    format: "Hybrid",
+    organizer: "Research Collaborations",
+    title: "AI research roundtable",
+    location: "Cottbus + online",
+  },
+  {
+    date: "02",
+    month: "OCT",
+    time: "19:00 CET",
+    format: "In person",
+    organizer: "International Students Germany",
+    title: "University student meetup",
+    location: "Potsdam",
+  },
+];
