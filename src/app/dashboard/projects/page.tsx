@@ -1,0 +1,3 @@
+import { FolderKanban } from "lucide-react";
+import { DashboardPlaceholder } from "@/components/dashboard/DashboardPlaceholder";
+export default function Page() { return <DashboardPlaceholder eyebrow="Projects" title="Give collaborative work a shared home." description="Projects will coordinate contributors, milestones, resources, and the conversations that move the work forward." emptyTitle="No connected projects yet" emptyDescription="Join a project from an opportunity or create one after organization workspaces are connected." icon={FolderKanban} action="Discover opportunities" href="/dashboard/opportunities" />; }
