@@ -2,28 +2,57 @@
 
 import { LoaderCircle } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { PasswordField } from "./PasswordField";
 
-export function LoginForm() {
+interface LoginFormProps {
+  /** Surfaced by /auth/callback when a confirmation or recovery link fails. */
+  notice?: string;
+}
+
+/** Only same-origin paths are accepted, so ?next= cannot bounce users off-site. */
+function safeNext() {
+  const value = new URLSearchParams(window.location.search).get("next");
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard/overview";
+  return value;
+}
+
+export function LoginForm({ notice }: LoginFormProps) {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({ form: notice });
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors: typeof errors = {};
     if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = "Enter a valid email address.";
     if (password.length < 8) nextErrors.password = "Password must contain at least 8 characters.";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
+
     setLoading(true);
-    window.setTimeout(() => {
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+
+      if (error) {
+        setErrors({ form: error.message });
+        return;
+      }
+
+      router.push(safeNext());
+      // Without this the server components above still render the signed-out tree.
+      router.refresh();
+    } catch {
+      setErrors({ form: "Could not reach Supabase. Check your connection and try again." });
+    } finally {
       setLoading(false);
-      setErrors({ form: "Authentication is prepared but not connected to Supabase yet." });
-    }, 550);
+    }
   }
 
   return (
@@ -44,7 +73,7 @@ export function LoginForm() {
           </div>
           <PasswordField hideLabel label="Password" name="password" autoComplete="current-password" value={password} onChange={setPassword} error={errors.password} />
         </div>
-        {errors.form ? <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[14px] leading-6 text-amber-800">{errors.form}</p> : null}
+        {errors.form ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-[14px] leading-6 text-red-700">{errors.form}</p> : null}
         <Button type="submit" disabled={loading} className="w-full rounded-xl">
           {loading ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : null}
           {loading ? "Signing in…" : "Sign in"}

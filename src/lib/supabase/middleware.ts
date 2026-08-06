@@ -1,14 +1,26 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { User } from "@supabase/supabase-js";
+import type { Database } from "./types";
 
-export async function updateSupabaseSession(request: NextRequest) {
+/**
+ * Refreshes the Supabase auth cookies for this request and reports who is
+ * signed in. The caller owns routing decisions -- see src/middleware.ts.
+ *
+ * The returned response carries the refreshed cookies. If the caller replaces
+ * it (e.g. with a redirect) it must copy those cookies across, otherwise a
+ * refreshed token is dropped and the user is silently signed out.
+ */
+export async function updateSupabaseSession(
+  request: NextRequest,
+): Promise<{ response: NextResponse; user: User | null }> {
   let response = NextResponse.next({ request });
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !anonKey) return response;
+  if (!url || !anonKey) return { response, user: null };
 
-  const supabase = createServerClient(url, anonKey, {
+  const supabase = createServerClient<Database>(url, anonKey, {
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll(cookiesToSet) {
@@ -19,6 +31,9 @@ export async function updateSupabaseSession(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
-  return response;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return { response, user };
 }

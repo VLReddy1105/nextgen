@@ -5,11 +5,17 @@ import { EventCard } from "@/components/dashboard/EventCard";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { OpportunityCard } from "@/components/dashboard/OpportunityCard";
 import { opportunities } from "@/data/mock-data";
+import { getSessionContext } from "@/lib/supabase/session";
+import { firstName } from "@/lib/utils";
 
-export default function DashboardOverviewPage() {
+export default async function DashboardOverviewPage() {
+  // The dashboard layout guarantees a session, so this is never null here.
+  const session = await getSessionContext();
+  const name = firstName(session?.profile?.full_name, session?.user.email);
+
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[14px] font-semibold text-blue-700">Monday, 3 August</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-4xl">Good morning, Alex.</h1><p className="mt-2 text-base text-slate-600">Here is what is moving across your NextGen workspace.</p></div><button type="button" className="inline-flex min-h-11 w-fit items-center rounded-full border border-slate-300 bg-white px-5 text-[15px] font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-600/20">Edit profile</button></div>
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[14px] font-semibold text-blue-700">Monday, 3 August</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-4xl">Good morning, {name}.</h1><p className="mt-2 text-base text-slate-600">Here is what is moving across your NextGen workspace.</p></div><button type="button" className="inline-flex min-h-11 w-fit items-center rounded-full border border-slate-300 bg-white px-5 text-[15px] font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-600/20">Edit profile</button></div>
       <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Profile completion" value="78%" detail="Complete 2 more details" icon={UserRoundCheck} /><MetricCard label="Saved opportunities" value="8" detail="3 closing soon" icon={Bookmark} /><MetricCard label="Applications" value="4" detail="1 status update" icon={CheckCircle2} /><MetricCard label="Upcoming events" value="3" detail="Next event in 2 days" icon={Clock3} /></div>
       <div className="mt-8 grid gap-6 xl:grid-cols-[1.35fr_.65fr]">
         <section><div className="flex items-center justify-between"><div><h2 className="text-xl font-semibold tracking-[-0.02em] text-slate-950">Recommended opportunities</h2><p className="mt-1 text-[14px] text-slate-500">Based on your interests and direction</p></div><Link href="/dashboard/opportunities" className="text-[14px] font-semibold text-blue-700">View all</Link></div><div className="mt-4 grid gap-4 md:grid-cols-2">{opportunities.slice(0, 2).map((opportunity) => <OpportunityCard key={opportunity.id} opportunity={opportunity} compact />)}</div></section>

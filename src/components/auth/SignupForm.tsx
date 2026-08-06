@@ -2,18 +2,47 @@
 
 import { LoaderCircle } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { UserRole } from "@/types";
 import { PasswordField } from "./PasswordField";
 
+/**
+ * platform_admin is excluded at the type level, not just by omission: the
+ * database trigger also refuses it from signup metadata, so adding it here
+ * would silently fall back to 'student'.
+ */
+type SignupRole = Exclude<UserRole, "platform_admin">;
+
+const SIGNUP_ROLES: { value: SignupRole; label: string }[] = [
+  { value: "student", label: "Student" },
+  { value: "founder", label: "Founder" },
+  { value: "mentor", label: "Mentor" },
+  { value: "professional", label: "Professional" },
+  { value: "company_representative", label: "Company representative" },
+  { value: "university_representative", label: "University representative" },
+  { value: "community_coordinator", label: "Community coordinator" },
+];
+
 export function SignupForm() {
-  const [values, setValues] = useState({ name: "", email: "", password: "", confirm: "", terms: false });
+  const router = useRouter();
+  const [values, setValues] = useState({
+    name: "",
+    email: "",
+    role: "student" as SignupRole,
+    password: "",
+    confirm: "",
+    terms: false,
+  });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setMessage("");
     const nextErrors: Record<string, string> = {};
     if (values.name.trim().length < 2) nextErrors.name = "Enter your full name.";
     if (!/^\S+@\S+\.\S+$/.test(values.email)) nextErrors.email = "Enter a valid email address.";
@@ -22,11 +51,38 @@ export function SignupForm() {
     if (!values.terms) nextErrors.terms = "Please agree before creating an account.";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
+
     setLoading(true);
-    window.setTimeout(() => {
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data, error } = await supabase.auth.signUp({
+        email: values.email.trim(),
+        password: values.password,
+        options: {
+          // Read by the on_auth_user_created trigger to populate public.profiles.
+          data: { full_name: values.name.trim(), role: values.role },
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding/welcome`,
+        },
+      });
+
+      if (error) {
+        setErrors({ form: error.message });
+        return;
+      }
+
+      if (data.session) {
+        // Email confirmation is disabled; the user is already signed in.
+        router.push("/onboarding/welcome");
+        router.refresh();
+        return;
+      }
+
+      setMessage(`Check ${values.email.trim()} for a confirmation link to finish creating your account.`);
+    } catch {
+      setErrors({ form: "Could not reach Supabase. Check your connection and try again." });
+    } finally {
       setLoading(false);
-      setMessage("Account creation is prepared but not connected to Supabase yet.");
-    }, 550);
+    }
   }
 
   return (
@@ -45,6 +101,13 @@ export function SignupForm() {
           <input id="signup-email" name="email" type="email" autoComplete="email" value={values.email} onChange={(event) => setValues({ ...values, email: event.target.value })} aria-invalid={Boolean(errors.email)} className={`mt-2 h-13 w-full rounded-xl border bg-white px-4 text-base outline-none transition focus:ring-4 ${errors.email ? "border-red-500 focus:ring-red-600/10" : "border-slate-300 focus:border-blue-500 focus:ring-blue-600/10"}`} />
           {errors.email ? <p role="alert" className="mt-2 text-[14px] font-medium text-red-600">{errors.email}</p> : null}
         </div>
+        <div>
+          <label htmlFor="signup-role" className="text-[15px] font-semibold text-slate-800">I am joining as</label>
+          <select id="signup-role" name="role" value={values.role} onChange={(event) => setValues({ ...values, role: event.target.value as SignupRole })} className="mt-2 h-13 w-full rounded-xl border border-slate-300 bg-white px-4 text-base outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-600/10">
+            {SIGNUP_ROLES.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
+          </select>
+          <p className="mt-2 text-[14px] text-slate-500">You can refine this during onboarding.</p>
+        </div>
         <PasswordField label="Password" name="password" autoComplete="new-password" value={values.password} onChange={(password) => setValues({ ...values, password })} error={errors.password} />
         <PasswordField label="Confirm password" name="confirm-password" autoComplete="new-password" value={values.confirm} onChange={(confirm) => setValues({ ...values, confirm })} error={errors.confirm} />
         <div>
@@ -54,7 +117,8 @@ export function SignupForm() {
           </label>
           {errors.terms ? <p role="alert" className="mt-2 text-[14px] font-medium text-red-600">{errors.terms}</p> : null}
         </div>
-        {message ? <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[14px] leading-6 text-amber-800">{message}</p> : null}
+        {errors.form ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-[14px] leading-6 text-red-700">{errors.form}</p> : null}
+        {message ? <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-[14px] leading-6 text-blue-800">{message}</p> : null}
         <Button type="submit" disabled={loading} className="w-full rounded-xl">{loading ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : null}{loading ? "Creating account…" : "Create account"}</Button>
       </form>
       <div className="my-6 flex items-center gap-3 text-[13px] text-slate-400"><span className="h-px flex-1 bg-slate-200" />or<span className="h-px flex-1 bg-slate-200" /></div>
