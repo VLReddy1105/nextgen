@@ -40,7 +40,7 @@ export function RoleCards() {
       <div className="container-shell">
         <SectionHeading
           eyebrow="Who it is for"
-          title="Different paths. One shared place to meet."
+          title="Your next opportunity probably starts with a conversation."
           description="NextGen helps each person or organization participate in a way that fits what they are trying to do."
         />
         <div className="mt-12 grid border-l border-t border-slate-200 sm:grid-cols-2 lg:grid-cols-3">

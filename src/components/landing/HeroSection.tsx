@@ -1,39 +1,66 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
-import { ButtonLink } from "@/components/ui/Button";
-import { EcosystemVisual } from "./EcosystemVisual";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { useRef } from "react";
+import { HeroVisual } from "./HeroVisual";
+
+const ease = [0.22, 1, 0.36, 1] as const;
 
 export function HeroSection() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const reduceMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start start", "end start"],
+  });
+
+  const copyY = useTransform(scrollYProgress, [0, 0.48], [0, reduceMotion ? 0 : -72]);
+  const copyOpacity = useTransform(scrollYProgress, [0, 0.34], [1, 0.18]);
+  const imageY = useTransform(scrollYProgress, [0, 1], [0, reduceMotion ? 0 : -22]);
+  const crowdY = useTransform(scrollYProgress, [0, 1], [0, reduceMotion ? 0 : -12]);
+
   return (
-    <section className="relative overflow-hidden border-b border-slate-200 bg-white pb-20 pt-12 sm:pb-24 sm:pt-16 lg:pb-28 lg:pt-20">
-      <div aria-hidden="true" className="absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(circle_at_70%_18%,rgba(37,99,235,.10),transparent_40%),radial-gradient(circle_at_12%_0%,rgba(148,163,184,.15),transparent_28%)]" />
-      <div className="container-shell relative grid items-center gap-14 lg:grid-cols-[1.02fr_.98fr] lg:gap-10">
-        <motion.div initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-          <p className="eyebrow">A community for meaningful progress</p>
-          <h1 className="mt-7 max-w-3xl text-[3.15rem] font-semibold leading-[1.02] tracking-[-0.055em] text-balance text-slate-950 sm:text-6xl lg:text-[4.55rem] xl:text-[5.1rem]">
-            Where the next generation finds its <span className="text-blue-600">people</span> and possibilities.
-          </h1>
-          <p className="mt-7 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl sm:leading-9">
-            Connect with students, founders, companies, universities, and mentors through one community built for useful opportunities and real progress.
-          </p>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <ButtonLink href="/signup" className="group px-6">
-              Join the Community
-              <ArrowRight aria-hidden="true" className="size-4 transition group-hover:translate-x-0.5" />
-            </ButtonLink>
-            <ButtonLink href="/opportunities" variant="secondary" className="px-6">Explore Opportunities</ButtonLink>
-          </div>
-          <p className="mt-6 flex items-start gap-2 text-[15px] leading-6 text-slate-500">
-            <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-green-600" />
-            Built for students, builders, institutions, and ambitious teams.
-          </p>
-        </motion.div>
-        <motion.div initial={{ opacity: 0, x: 25 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.12 }}>
-          <EcosystemVisual />
-        </motion.div>
-      </div>
+    <section
+      ref={sectionRef}
+      className="relative isolate overflow-hidden bg-[linear-gradient(to_bottom,#fff_0%,#fff_68%,#f8fafc_100%)]"
+    >
+      <motion.div
+        style={{ y: copyY, opacity: copyOpacity }}
+        className="container-shell relative z-20 flex flex-col items-center pt-10 text-center sm:pt-14 lg:pt-16"
+      >
+        <h1 className="overflow-visible text-[clamp(3.35rem,14.5vw,4.75rem)] font-[780] leading-[0.96] tracking-[-0.065em] text-[#0d0d0f] sm:text-[clamp(5.6rem,10vw,7.25rem)] lg:text-[clamp(6rem,8vw,8.5rem)]">
+          <motion.span
+            initial={{ y: 26, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.68, delay: 0.18, ease }}
+            className="block overflow-visible"
+          >
+            NextGen
+          </motion.span>
+          <motion.span
+            initial={{ y: 26, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.72, delay: 0.32, ease }}
+            className="flex justify-center overflow-visible"
+          >
+            <span className="inline-flex items-baseline overflow-visible pb-[0.24em] pt-[0.12em] leading-[1.12]">
+              <span className="inline-block bg-[linear-gradient(104deg,#111114_12%,#24243a_66%,#4338ca_112%)] bg-clip-text text-transparent">Communit</span>
+              <span className="inline-block origin-top scale-y-[1.12] overflow-visible text-[#4338ca]">y</span>
+            </span>
+          </motion.span>
+        </h1>
+
+        <motion.p
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.68, delay: 0.5, ease }}
+          className="mt-4 max-w-[52rem] text-[1.22rem] font-medium leading-[1.42] tracking-[-0.025em] text-zinc-600 sm:text-[1.55rem] lg:text-[1.72rem]"
+        >
+          Meet your people. Find your opportunities. Build what&apos;s next.
+        </motion.p>
+      </motion.div>
+
+      <HeroVisual imageY={imageY} crowdY={crowdY} />
     </section>
   );
 }

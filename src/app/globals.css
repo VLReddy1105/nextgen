@@ -81,6 +81,108 @@ a {
   mask-image: linear-gradient(to bottom, black, transparent 92%);
 }
 
+.hero-crowd-treatment {
+  -webkit-backdrop-filter: blur(1.4px) saturate(0.82) brightness(0.94);
+  backdrop-filter: blur(1.4px) saturate(0.82) brightness(0.94);
+  background: rgba(10, 15, 28, 0.025);
+  -webkit-mask-image: radial-gradient(
+    ellipse 25% 48% at 50% 47%,
+    transparent 0%,
+    transparent 32%,
+    rgba(0, 0, 0, 0.2) 48%,
+    rgba(0, 0, 0, 0.72) 72%,
+    #000 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 25% 48% at 50% 47%,
+    transparent 0%,
+    transparent 32%,
+    rgba(0, 0, 0, 0.2) 48%,
+    rgba(0, 0, 0, 0.72) 72%,
+    #000 100%
+  );
+  will-change: transform;
+}
+
+.hero-person-light {
+  background: radial-gradient(
+    ellipse 23% 38% at 50% 47%,
+    rgba(255, 255, 255, 0.11) 0%,
+    rgba(255, 255, 255, 0.045) 38%,
+    transparent 72%
+  );
+}
+
+.hero-image-top-fade {
+  background: linear-gradient(
+    to bottom,
+    #fff 0%,
+    rgba(255, 255, 255, 0.99) 8%,
+    rgba(255, 255, 255, 0.9) 14%,
+    rgba(255, 255, 255, 0.62) 20%,
+    rgba(255, 255, 255, 0.26) 26%,
+    rgba(255, 255, 255, 0.06) 31%,
+    transparent 36%
+  );
+}
+
+.hero-image-edge-vignette {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.18),
+    transparent 9%,
+    transparent 91%,
+    rgba(255, 255, 255, 0.18)
+  );
+}
+
+.hero-image-bottom-fade {
+  background: linear-gradient(to bottom, transparent, rgba(248, 250, 252, 0.46) 58%, #f8fafc 100%);
+}
+
+@media (max-width: 639px) {
+  .hero-crowd-treatment {
+    -webkit-backdrop-filter: blur(0.8px) saturate(0.86) brightness(0.96);
+    backdrop-filter: blur(0.8px) saturate(0.86) brightness(0.96);
+    -webkit-mask-image: radial-gradient(
+      ellipse 43% 45% at 50% 48%,
+      transparent 0%,
+      transparent 38%,
+      rgba(0, 0, 0, 0.28) 62%,
+      #000 100%
+    );
+    mask-image: radial-gradient(
+      ellipse 43% 45% at 50% 48%,
+      transparent 0%,
+      transparent 38%,
+      rgba(0, 0, 0, 0.28) 62%,
+      #000 100%
+    );
+  }
+
+  .hero-image-top-fade {
+    background: linear-gradient(
+      to bottom,
+      #fff 0%,
+      rgba(255, 255, 255, 0.98) 7%,
+      rgba(255, 255, 255, 0.82) 13%,
+      rgba(255, 255, 255, 0.48) 20%,
+      rgba(255, 255, 255, 0.15) 26%,
+      transparent 32%
+    );
+  }
+
+  .hero-image-edge-vignette {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.1),
+      transparent 6%,
+      transparent 94%,
+      rgba(255, 255, 255, 0.1)
+    );
+  }
+}
+
 @media (min-width: 640px) {
   .container-shell {
     width: min(100% - 3rem, 80rem);

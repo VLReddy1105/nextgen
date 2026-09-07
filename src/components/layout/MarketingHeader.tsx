@@ -35,9 +35,12 @@ export function MarketingHeader() {
   }, [open]);
 
   return (
-    <header
-      className={`sticky top-0 z-50 border-b transition duration-300 ${
-        scrolled ? "border-slate-200 bg-white/95 shadow-[0_8px_28px_rgba(15,23,42,.06)] backdrop-blur-xl" : "border-transparent bg-white/80 backdrop-blur-md"
+    <motion.header
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+      className={`sticky top-0 z-50 transition-[background-color,backdrop-filter] duration-300 ${
+        scrolled ? "bg-white/[.82] backdrop-blur-[18px]" : "bg-white/90 backdrop-blur-sm"
       }`}
     >
       <div className="container-shell flex h-[76px] items-center justify-between gap-5">
@@ -98,6 +101,6 @@ export function MarketingHeader() {
           </motion.div>
         ) : null}
       </AnimatePresence>
-    </header>
+    </motion.header>
   );
 }
