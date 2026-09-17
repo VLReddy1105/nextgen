@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { DashboardChrome } from "@/components/layout/DashboardChrome";
+import { accountRoute, getAccountState } from "@/lib/auth/account-state";
 import { getSessionContext } from "@/lib/supabase/session";
 import { displayName, initials } from "@/lib/utils";
 
@@ -12,11 +13,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // never be rendered without a verified user even if middleware is bypassed.
   const session = await getSessionContext();
   if (!session) redirect("/login?next=/dashboard/overview");
+  const state = getAccountState(session);
+  if (state !== "ready") redirect(accountRoute(state));
+  if (!session.profile?.primary_role) redirect("/account-error");
 
   const name = displayName(session.profile?.full_name, session.user.email);
 
   return (
-    <DashboardChrome user={{ name, initials: initials(name) }}>
+    <DashboardChrome role={session.profile.primary_role} user={{ name, initials: initials(name) }}>
       {children}
     </DashboardChrome>
   );

@@ -1,3 +1,2 @@
-import { Settings } from "lucide-react";
-import { DashboardPlaceholder } from "@/components/dashboard/DashboardPlaceholder";
-export default function Page() { return <DashboardPlaceholder eyebrow="Settings" title="Control your NextGen experience." description="Profile visibility, notification preferences, account security, and workspace membership will be managed here." emptyTitle="Settings are prepared for your account" emptyDescription="Persisted preferences require an authenticated profile. The interface boundary is ready for integration." icon={Settings} action="Edit onboarding profile" href="/onboarding/profile" />; }
+import { redirect } from "next/navigation";
+export default function Page() { redirect("/dashboard/profile"); }

@@ -15,3 +15,9 @@
 export function redirectToPath(path: string, status: 303 | 307 = 307) {
   return new Response(null, { status, headers: { Location: path } });
 }
+
+/** Keep return destinations on this site, including when a browser normalizes slashes. */
+export function safeInternalPath(value: string | null | undefined, fallback: string) {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || /[\\\u0000-\u001f\u007f]/.test(value)) return fallback;
+  return value;
+}

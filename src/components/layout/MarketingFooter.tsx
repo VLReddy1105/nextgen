@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { NextGenLogo } from "@/components/brand/NextGenLogo";
+import { GenZnectLogo } from "@/components/brand/GenZnectLogo";
 
 const columns = [
   {
@@ -8,7 +8,7 @@ const columns = [
   },
   {
     title: "For people",
-    links: ["Students", "Founders", "Mentors", "Professionals"],
+    links: ["Students", "Founders", "Mentors"],
   },
   {
     title: "For organizations",
@@ -26,7 +26,7 @@ export function MarketingFooter() {
       <div className="container-shell py-14 sm:py-18">
         <div className="grid gap-12 lg:grid-cols-[1.2fr_2fr]">
           <div className="max-w-sm">
-            <NextGenLogo />
+            <GenZnectLogo />
             <p className="mt-5 text-base leading-7 text-slate-600">
               A professional community where people and organizations find useful opportunities, build teams, and make progress together.
             </p>
@@ -52,7 +52,7 @@ export function MarketingFooter() {
           </div>
         </div>
         <div className="mt-14 flex flex-col gap-3 border-t border-slate-200 pt-6 text-[15px] text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-          <p>© {new Date().getFullYear()} NextGen Community. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} GenZnect. All rights reserved.</p>
           <p>Built for purposeful professional connection.</p>
         </div>
       </div>

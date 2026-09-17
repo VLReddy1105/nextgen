@@ -1,3 +1,13 @@
-import { UsersRound } from "lucide-react";
-import { DashboardPlaceholder } from "@/components/dashboard/DashboardPlaceholder";
-export default function Page() { return <DashboardPlaceholder eyebrow="Communities" title="Your focused professional spaces." description="Follow conversations, events, resources, and collaboration requests from the communities you join." emptyTitle="Choose your first community" emptyDescription="The public community preview is ready while membership data remains mocked." icon={UsersRound} action="Browse communities" href="/communities" />; }
+import { ResourceCollection } from "@/components/dashboard/ResourceCollection";
+import { requireAuthenticatedUser } from "@/lib/auth/permissions";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+export default async function Page() {
+  const session = await requireAuthenticatedUser();
+  const supabase = await createSupabaseServerClient();
+  const { data: memberships } = await supabase.from("community_members").select("community_id, role").eq("user_id", session.user.id).eq("status", "active");
+  const ids = memberships?.map(item => item.community_id) ?? [];
+  const { data: communities } = ids.length ? await supabase.from("communities").select("id, name, description").in("id", ids) : { data: [] };
+  const spaces = (communities ?? []).map(item => ({ ...item, role: memberships?.find(member => member.community_id === item.id)?.role ?? "member" }));
+  return <ResourceCollection kind="communities" spaces={spaces} />;
+}

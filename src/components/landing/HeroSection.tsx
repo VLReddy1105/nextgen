@@ -35,7 +35,7 @@ export function HeroSection() {
             transition={{ duration: 0.68, delay: 0.18, ease }}
             className="block overflow-visible"
           >
-            NextGen
+
           </motion.span>
           <motion.span
             initial={{ y: 26, opacity: 0 }}
@@ -43,9 +43,9 @@ export function HeroSection() {
             transition={{ duration: 0.72, delay: 0.32, ease }}
             className="flex justify-center overflow-visible"
           >
-            <span className="inline-flex items-baseline overflow-visible pb-[0.24em] pt-[0.12em] leading-[1.12]">
-              <span className="inline-block bg-[linear-gradient(104deg,#111114_12%,#24243a_66%,#4338ca_112%)] bg-clip-text text-transparent">Communit</span>
-              <span className="inline-block origin-top scale-y-[1.12] overflow-visible text-[#4338ca]">y</span>
+            <span className="inline-flex items-baseline overflow-visible px-[1.55em] pb-[0.24em] pt-[0.09em] leading-[1.12]">
+              <span className="inline-block bg-[linear-gradient(104deg,#111114_12%,#24243a_66%,#4338ca_112%)] bg-clip-text text-transparent">G e n Z n e c t</span>
+              <span className="inline-block origin-top scale-y-[1.12] overflow-visible text-[#4338ca]"></span>
             </span>
           </motion.span>
         </h1>

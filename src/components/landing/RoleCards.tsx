@@ -41,7 +41,7 @@ export function RoleCards() {
         <SectionHeading
           eyebrow="Who it is for"
           title="Your next opportunity probably starts with a conversation."
-          description="NextGen helps each person or organization participate in a way that fits what they are trying to do."
+          description="GenZnect helps each person or organization participate in a way that fits what they are trying to do."
         />
         <div className="mt-12 grid border-l border-t border-slate-200 sm:grid-cols-2 lg:grid-cols-3">
           {roles.map((role) => {
