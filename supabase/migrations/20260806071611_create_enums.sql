@@ -1,4 +1,4 @@
--- Enum types for NextGen v1.
+-- Enum types for the initial GenZnect schema.
 --
 -- user_role and organization_type mirror the TypeScript unions already declared
 -- in src/types/index.ts. Keep the two in sync: adding a value here requires

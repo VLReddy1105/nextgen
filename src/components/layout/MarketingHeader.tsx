@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { NextGenLogo } from "@/components/brand/NextGenLogo";
+import { GenZnectLogo } from "@/components/brand/GenZnectLogo";
 import { ButtonLink } from "@/components/ui/Button";
 
 const navigation = [
@@ -44,7 +44,7 @@ export function MarketingHeader() {
       }`}
     >
       <div className="container-shell flex h-[76px] items-center justify-between gap-5">
-        <NextGenLogo />
+        <GenZnectLogo />
         <nav aria-label="Main navigation" className="hidden items-center gap-1 xl:flex">
           {navigation.map((item) => (
             <Link
@@ -58,7 +58,7 @@ export function MarketingHeader() {
         </nav>
         <div className="hidden items-center gap-2 sm:flex">
           <ButtonLink href="/login" variant="ghost">Sign In</ButtonLink>
-          <ButtonLink href="/signup">Join NextGen</ButtonLink>
+          <ButtonLink href="/signup">Join GenZnect</ButtonLink>
         </div>
         <button
           type="button"
@@ -94,7 +94,7 @@ export function MarketingHeader() {
                 </Link>
               ))}
               <div className="mt-7 grid gap-3">
-                <ButtonLink href="/signup" className="w-full">Join NextGen</ButtonLink>
+                <ButtonLink href="/signup" className="w-full">Join GenZnect</ButtonLink>
                 <ButtonLink href="/login" variant="secondary" className="w-full">Sign In</ButtonLink>
               </div>
             </nav>

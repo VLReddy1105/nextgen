@@ -15,7 +15,7 @@ export const opportunities: Opportunity[] = [
   {
     id: "product-design-intern",
     title: "Product Design Intern",
-    organization: "NextGen Labs",
+    organization: "GenZnect Labs",
     monogram: "NG",
     location: "Berlin",
     workMode: "Remote friendly",
@@ -96,7 +96,7 @@ export const events: CommunityEvent[] = [
     month: "SEP",
     time: "16:00 CET",
     format: "Online",
-    organizer: "NextGen Career Circle",
+    organizer: "GenZnect Career Circle",
     title: "CV and HiWi workshop",
     location: "Online room",
   },

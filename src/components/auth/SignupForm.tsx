@@ -5,44 +5,39 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { safeInternalPath } from "@/lib/http";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { UserRole } from "@/types";
+import type { PrimaryRole } from "@/types";
 import { PasswordField } from "./PasswordField";
 
-/**
- * platform_admin is excluded at the type level, not just by omission: the
- * database trigger also refuses it from signup metadata, so adding it here
- * would silently fall back to 'student'.
- */
-type SignupRole = Exclude<UserRole, "platform_admin">;
-
-const SIGNUP_ROLES: { value: SignupRole; label: string }[] = [
-  { value: "student", label: "Student" },
-  { value: "founder", label: "Founder" },
-  { value: "mentor", label: "Mentor" },
-  { value: "professional", label: "Professional" },
-  { value: "company_representative", label: "Company representative" },
-  { value: "university_representative", label: "University representative" },
-  { value: "community_coordinator", label: "Community coordinator" },
+const SIGNUP_ROLES: { value: PrimaryRole; label: string; description: string }[] = [
+  { value: "student", label: "Student", description: "Explore opportunities, projects and mentors." },
+  { value: "founder", label: "Founder", description: "Build and connect with talent." },
+  { value: "university", label: "University", description: "Manage students and partnerships." },
+  { value: "company", label: "Company", description: "Discover talent and industry connections." },
+  { value: "mentor", label: "Mentor", description: "Guide students and project teams." },
 ];
+
+function signupNext() {
+  const value = new URLSearchParams(window.location.search).get("next");
+  return safeInternalPath(value, "/dashboard/overview");
+}
 
 export function SignupForm() {
   const router = useRouter();
   const [values, setValues] = useState({
     name: "",
     email: "",
-    role: "student" as SignupRole,
+    role: "student" as PrimaryRole,
     password: "",
     confirm: "",
     terms: false,
   });
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
     const nextErrors: Record<string, string> = {};
     if (values.name.trim().length < 2) nextErrors.name = "Enter your full name.";
     if (!/^\S+@\S+\.\S+$/.test(values.email)) nextErrors.email = "Enter a valid email address.";
@@ -55,13 +50,14 @@ export function SignupForm() {
     setLoading(true);
     try {
       const supabase = createSupabaseBrowserClient();
+      const onboardingPath = `/onboarding?next=${encodeURIComponent(signupNext())}`;
       const { data, error } = await supabase.auth.signUp({
         email: values.email.trim(),
         password: values.password,
         options: {
           // Read by the on_auth_user_created trigger to populate public.profiles.
           data: { full_name: values.name.trim(), role: values.role },
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding/welcome`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(signupNext())}`,
         },
       });
 
@@ -72,12 +68,13 @@ export function SignupForm() {
 
       if (data.session) {
         // Email confirmation is disabled; the user is already signed in.
-        router.push("/onboarding/welcome");
+        router.push(onboardingPath);
         router.refresh();
         return;
       }
 
-      setMessage(`Check ${values.email.trim()} for a confirmation link to finish creating your account.`);
+      router.push("/verify-email");
+      router.refresh();
     } catch {
       setErrors({ form: "Could not reach Supabase. Check your connection and try again." });
     } finally {
@@ -89,7 +86,7 @@ export function SignupForm() {
     <div>
       <p className="eyebrow">Join the community</p>
       <h1 className="mt-5 text-4xl font-semibold tracking-[-0.04em] text-slate-950">Create your account</h1>
-      <p className="mt-3 text-base leading-7 text-slate-600">Start with your identity. You can shape your role and interests next.</p>
+      <p className="mt-3 text-base leading-7 text-slate-600">One account, with a workspace for your role.</p>
       <form onSubmit={submit} noValidate className="mt-8 space-y-5">
         <div>
           <label htmlFor="signup-name" className="text-[15px] font-semibold text-slate-800">Full name</label>
@@ -102,11 +99,9 @@ export function SignupForm() {
           {errors.email ? <p role="alert" className="mt-2 text-[14px] font-medium text-red-600">{errors.email}</p> : null}
         </div>
         <div>
-          <label htmlFor="signup-role" className="text-[15px] font-semibold text-slate-800">I am joining as</label>
-          <select id="signup-role" name="role" value={values.role} onChange={(event) => setValues({ ...values, role: event.target.value as SignupRole })} className="mt-2 h-13 w-full rounded-xl border border-slate-300 bg-white px-4 text-base outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-600/10">
-            {SIGNUP_ROLES.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
-          </select>
-          <p className="mt-2 text-[14px] text-slate-500">You can refine this during onboarding.</p>
+          <fieldset><legend className="text-[15px] font-semibold text-slate-800">How are you joining GenZnect?</legend><div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {SIGNUP_ROLES.map((role) => <label key={role.value} className={`flex cursor-pointer gap-3 rounded-xl border p-3 focus-within:ring-4 focus-within:ring-blue-600/10 ${values.role === role.value ? "border-blue-600 bg-blue-50" : "border-slate-200"}`}><input type="radio" name="role" value={role.value} checked={values.role === role.value} onChange={() => setValues({ ...values, role: role.value })} className="mt-1 accent-blue-600" /><span><span className="block text-sm font-semibold text-slate-900">{role.label}</span><span className="mt-1 block text-xs leading-5 text-slate-600">{role.description}</span></span></label>)}
+          </div></fieldset>
         </div>
         <PasswordField label="Password" name="password" autoComplete="new-password" value={values.password} onChange={(password) => setValues({ ...values, password })} error={errors.password} />
         <PasswordField label="Confirm password" name="confirm-password" autoComplete="new-password" value={values.confirm} onChange={(confirm) => setValues({ ...values, confirm })} error={errors.confirm} />
@@ -118,7 +113,6 @@ export function SignupForm() {
           {errors.terms ? <p role="alert" className="mt-2 text-[14px] font-medium text-red-600">{errors.terms}</p> : null}
         </div>
         {errors.form ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-[14px] leading-6 text-red-700">{errors.form}</p> : null}
-        {message ? <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-[14px] leading-6 text-blue-800">{message}</p> : null}
         <Button type="submit" disabled={loading} className="w-full rounded-xl">{loading ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : null}{loading ? "Creating account…" : "Create account"}</Button>
       </form>
       <div className="my-6 flex items-center gap-3 text-[13px] text-slate-400"><span className="h-px flex-1 bg-slate-200" />or<span className="h-px flex-1 bg-slate-200" /></div>

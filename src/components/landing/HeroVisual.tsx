@@ -49,7 +49,7 @@ export function HeroVisual({ imageY, crowdY }: HeroVisualProps) {
             className="absolute inset-0 will-change-transform"
           >
             <Image
-              src="/images/nextgen-community-hero.png"
+              src="/images/genznect-hero.png"
               alt="A focused young man looking upward while moving through a large crowd"
               fill
               priority
@@ -72,7 +72,7 @@ export function HeroVisual({ imageY, crowdY }: HeroVisualProps) {
       <div aria-hidden="true" className="hero-image-bottom-fade absolute inset-x-0 bottom-0 z-20 h-[25%]" />
 
       <figcaption className="sr-only">
-        In a busy world, NextGen helps people find the communities, conversations, and opportunities that give their next step direction.
+        In a busy world, GenZnect helps people find the communities, conversations, and opportunities that give their next step direction.
       </figcaption>
     </motion.figure>
   );

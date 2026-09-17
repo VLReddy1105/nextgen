@@ -32,9 +32,9 @@ export function ProcessSection() {
     <section className="bg-[#f8fafc] py-20 sm:py-24 lg:py-28">
       <div className="container-shell">
         <SectionHeading
-          eyebrow="How NextGen works"
+          eyebrow="How GenZnect works"
           title="A clear path from introduction to action."
-          description="NextGen is structured around the moments that turn a profile into a real conversation, project, role, or collaboration."
+          description="GenZnect is structured around the moments that turn a profile into a real conversation, project, role, or collaboration."
         />
         <div className="relative mt-14">
           <div aria-hidden="true" className="absolute bottom-10 left-6 top-10 hidden w-px bg-slate-300 md:block lg:bottom-auto lg:left-[8%] lg:right-[8%] lg:top-8 lg:h-px lg:w-auto" />

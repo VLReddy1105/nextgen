@@ -3,21 +3,21 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "NextGen Community | People, Opportunities and Ideas in One Place",
-    template: "%s | NextGen Community",
+    default: "GenZnect | People, Opportunities and Ideas in One Place",
+    template: "%s | GenZnect",
   },
   description:
-    "NextGen Community connects students, founders, companies, universities, mentors, and communities through opportunities, collaboration, events, and meaningful professional connections.",
+    "GenZnect connects students, founders, companies, universities, mentors, and communities through opportunities, collaboration, events, and meaningful professional connections.",
   openGraph: {
-    title: "NextGen Community | People, Opportunities and Ideas in One Place",
+    title: "GenZnect | People, Opportunities and Ideas in One Place",
     description:
       "People, opportunities, communities, and ideas in one connected professional space.",
     type: "website",
-    siteName: "NextGen Community",
+    siteName: "GenZnect",
   },
   twitter: {
     card: "summary_large_image",
-    title: "NextGen Community",
+    title: "GenZnect",
     description:
       "A professional community for people and organizations building meaningful progress together.",
   },

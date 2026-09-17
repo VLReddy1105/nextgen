@@ -40,7 +40,7 @@ export function EcosystemVisual() {
         className="absolute left-1/2 top-1/2 flex w-[180px] -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-[1.7rem] border border-slate-200 bg-white p-5 text-center shadow-[0_18px_50px_rgba(15,23,42,.14)]"
       >
         <BrandMark className="size-14 rounded-2xl" />
-        <p className="mt-3 font-semibold tracking-[-0.02em] text-slate-950">NextGen Network</p>
+        <p className="mt-3 font-semibold tracking-[-0.02em] text-slate-950">GenZnect Network</p>
         <p className="mt-1 text-[13px] leading-5 text-slate-500">People · Ideas · Progress</p>
       </motion.div>
 

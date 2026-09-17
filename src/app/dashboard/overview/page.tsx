@@ -1,30 +1,42 @@
-import { Bookmark, CheckCircle2, Clock3, Compass, UserRoundCheck } from "lucide-react";
 import Link from "next/link";
-import { ApplicationStatus } from "@/components/dashboard/ApplicationStatus";
-import { EventCard } from "@/components/dashboard/EventCard";
-import { MetricCard } from "@/components/dashboard/MetricCard";
-import { OpportunityCard } from "@/components/dashboard/OpportunityCard";
-import { opportunities } from "@/data/mock-data";
 import { getSessionContext } from "@/lib/supabase/session";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { firstName } from "@/lib/utils";
+import type { PrimaryRole } from "@/types";
+
+const copy: Record<PrimaryRole, { title: string; description: string; action: string; href: string }> = {
+  student: { title: "Your student workspace", description: "Explore projects, communities and opportunities at your own pace.", action: "My University", href: "/dashboard/my-university" },
+  founder: { title: "Your founder workspace", description: "Build your profile and bring collaborators into your projects.", action: "Projects", href: "/dashboard/projects" },
+  university: { title: "Your university workspace", description: "Manage your students and your university presence on GenZnect.", action: "Manage students", href: "/dashboard/students" },
+  company: { title: "Your company workspace", description: "Develop your company presence and connect with the wider network.", action: "Opportunities", href: "/dashboard/opportunities" },
+  mentor: { title: "Your mentor workspace", description: "Share your experience through projects and communities.", action: "Communities", href: "/dashboard/communities" },
+};
 
 export default async function DashboardOverviewPage() {
-  // The dashboard layout guarantees a session, so this is never null here.
   const session = await getSessionContext();
-  const name = firstName(session?.profile?.full_name, session?.user.email);
+  const role = session?.profile?.primary_role ?? "student";
+  const supabase = await createSupabaseServerClient();
+  const userId = session?.user.id ?? "";
+  const [projects, communities, studentUniversities, officialOrganization] = await Promise.all([
+    supabase.from("project_members").select("project_id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "active"),
+    supabase.from("community_members").select("community_id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "active"),
+    supabase.from("university_student_memberships").select("university_id", { count: "exact", head: true }).eq("student_user_id", userId).eq("status", "active"),
+    supabase.from("organizations").select("id, name").eq("created_by", userId).eq("official_account", true).maybeSingle(),
+  ]);
+  const membershipCount = role === "student" ? studentUniversities.count ?? 0 : 0;
+  const universityStudents = role === "university" && officialOrganization.data
+    ? await supabase.from("university_student_memberships").select("id", { count: "exact", head: true }).eq("university_id", officialOrganization.data.id).eq("status", "active")
+    : null;
+  const headline = copy[role];
+  const stats = role === "university"
+    ? [["Active students", universityStudents?.count ?? 0], ["Projects", projects.count ?? 0], ["Communities", communities.count ?? 0]]
+    : role === "student"
+      ? [["University affiliations", membershipCount], ["Projects", projects.count ?? 0], ["Communities", communities.count ?? 0]]
+      : [["Projects", projects.count ?? 0], ["Communities", communities.count ?? 0]];
 
-  return (
-    <div className="mx-auto max-w-7xl">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[14px] font-semibold text-blue-700">Monday, 3 August</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-4xl">Good morning, {name}.</h1><p className="mt-2 text-base text-slate-600">Here is what is moving across your NextGen workspace.</p></div><button type="button" className="inline-flex min-h-11 w-fit items-center rounded-full border border-slate-300 bg-white px-5 text-[15px] font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-600/20">Edit profile</button></div>
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Profile completion" value="78%" detail="Complete 2 more details" icon={UserRoundCheck} /><MetricCard label="Saved opportunities" value="8" detail="3 closing soon" icon={Bookmark} /><MetricCard label="Applications" value="4" detail="1 status update" icon={CheckCircle2} /><MetricCard label="Upcoming events" value="3" detail="Next event in 2 days" icon={Clock3} /></div>
-      <div className="mt-8 grid gap-6 xl:grid-cols-[1.35fr_.65fr]">
-        <section><div className="flex items-center justify-between"><div><h2 className="text-xl font-semibold tracking-[-0.02em] text-slate-950">Recommended opportunities</h2><p className="mt-1 text-[14px] text-slate-500">Based on your interests and direction</p></div><Link href="/dashboard/opportunities" className="text-[14px] font-semibold text-blue-700">View all</Link></div><div className="mt-4 grid gap-4 md:grid-cols-2">{opportunities.slice(0, 2).map((opportunity) => <OpportunityCard key={opportunity.id} opportunity={opportunity} compact />)}</div></section>
-        <div className="space-y-6">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold text-slate-950">Application status</h2><Link href="/dashboard/applications" className="text-[13px] font-semibold text-blue-700">View all</Link></div><div className="mt-3"><ApplicationStatus title="AI Research Assistant" organization="BTU Cottbus-Senftenberg" stage="In review" /><ApplicationStatus title="Product Design Intern" organization="NextGen Labs" stage="Submitted" /><ApplicationStatus title="Student Research Fellow" organization="Mobility Lab" stage="Interview" /></div></section>
-          <section className="rounded-2xl border border-slate-200 bg-white p-5"><h2 className="text-lg font-semibold text-slate-950">Coming up</h2><div className="mt-2"><EventCard date="14 SEP · 18:30" title="Founder networking session" meta="Berlin Mitte · In person" /><EventCard date="19 SEP · 16:00" title="CV and HiWi workshop" meta="Online" /></div></section>
-        </div>
-      </div>
-      <section className="mt-6 rounded-2xl bg-slate-950 p-6 text-white sm:flex sm:items-center sm:justify-between sm:gap-8"><div className="flex items-start gap-4"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white/10 text-blue-300"><Compass aria-hidden="true" className="size-5" /></span><div><h2 className="text-lg font-semibold">Make your recommendations more useful</h2><p className="mt-1 max-w-2xl text-[15px] leading-6 text-slate-400">Add the skills you are currently building and the kinds of opportunities you want next.</p></div></div><button type="button" className="mt-5 min-h-11 shrink-0 rounded-full bg-white px-5 text-[15px] font-semibold text-slate-950 sm:mt-0">Update interests</button></section>
-    </div>
-  );
+  return <div className="mx-auto max-w-6xl"><p className="text-sm font-semibold text-blue-700">{new Date().toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric" })}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Welcome, {firstName(session?.profile?.full_name, session?.user.email)}.</h1><p className="mt-2 text-slate-600">{headline.description}</p>
+    <section className="mt-8 rounded-2xl bg-slate-950 p-7 text-white sm:p-9"><p className="text-sm font-semibold text-blue-300">{officialOrganization.data?.name ?? "GenZnect"}</p><h2 className="mt-2 text-2xl font-semibold">{headline.title}</h2><p className="mt-2 max-w-2xl text-slate-300">Your account has one primary role. Project and community responsibilities are granted within each space.</p><Link href={headline.href} className="mt-6 inline-flex min-h-11 items-center rounded-full bg-white px-5 text-sm font-semibold text-slate-950 hover:bg-slate-100">{headline.action}</Link></section>
+    <div className="mt-6 grid gap-4 sm:grid-cols-3">{stats.map(([label, value]) => <div key={label} className="rounded-xl border border-slate-200 bg-white p-6"><p className="text-sm text-slate-500">{label}</p><p className="mt-3 text-3xl font-semibold text-slate-950">{value}</p></div>)}</div>
+    {role === "student" && membershipCount === 0 ? <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6"><h2 className="text-lg font-semibold text-slate-950">Using GenZnect independently</h2><p className="mt-2 text-slate-600">Your Student account works without a university affiliation. A university can connect your account later.</p></section> : null}
+  </div>;
 }

@@ -5,19 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { safeInternalPath } from "@/lib/http";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { PasswordField } from "./PasswordField";
 
 interface LoginFormProps {
   /** Surfaced by /auth/callback when a confirmation or recovery link fails. */
   notice?: string;
-}
-
-/** Only same-origin paths are accepted, so ?next= cannot bounce users off-site. */
-function safeNext() {
-  const value = new URLSearchParams(window.location.search).get("next");
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard/overview";
-  return value;
 }
 
 export function LoginForm({ notice }: LoginFormProps) {
@@ -31,7 +25,7 @@ export function LoginForm({ notice }: LoginFormProps) {
     event.preventDefault();
     const nextErrors: typeof errors = {};
     if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = "Enter a valid email address.";
-    if (password.length < 8) nextErrors.password = "Password must contain at least 8 characters.";
+    if (!password) nextErrors.password = "Enter your password.";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
@@ -45,7 +39,7 @@ export function LoginForm({ notice }: LoginFormProps) {
         return;
       }
 
-      router.push(safeNext());
+      router.push(safeInternalPath(new URLSearchParams(window.location.search).get("next"), "/dashboard/overview"));
       // Without this the server components above still render the signed-out tree.
       router.refresh();
     } catch {
@@ -58,7 +52,7 @@ export function LoginForm({ notice }: LoginFormProps) {
   return (
     <div>
       <p className="eyebrow">Welcome back</p>
-      <h1 className="mt-5 text-4xl font-semibold tracking-[-0.04em] text-slate-950">Sign in to NextGen</h1>
+      <h1 className="mt-5 text-4xl font-semibold tracking-[-0.04em] text-slate-950">Sign in to GenZnect</h1>
       <p className="mt-3 text-base leading-7 text-slate-600">Continue to your communities, opportunities, and workspace.</p>
       <form onSubmit={submit} noValidate className="mt-8 space-y-5">
         <div>
@@ -81,7 +75,7 @@ export function LoginForm({ notice }: LoginFormProps) {
       </form>
       <div className="my-6 flex items-center gap-3 text-[13px] text-slate-400"><span className="h-px flex-1 bg-slate-200" />or<span className="h-px flex-1 bg-slate-200" /></div>
       <button type="button" disabled className="inline-flex min-h-12 w-full cursor-not-allowed items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 text-[15px] font-semibold text-slate-400">Google sign-in available after setup</button>
-      <p className="mt-7 text-center text-[15px] text-slate-600">New to NextGen? <Link href="/signup" className="font-semibold text-blue-700 hover:text-blue-800 focus-visible:rounded focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-600/20">Create an account</Link></p>
+      <p className="mt-7 text-center text-[15px] text-slate-600">New to GenZnect? <Link href="/signup" className="font-semibold text-blue-700 hover:text-blue-800 focus-visible:rounded focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-600/20">Create an account</Link></p>
     </div>
   );
 }

@@ -18,7 +18,7 @@ export function MarketingSubpage({ eyebrow, title, description, items }: Marketi
           <h1 className="mt-6 max-w-4xl text-5xl font-semibold leading-[1.04] tracking-[-0.05em] text-balance text-slate-950 sm:text-6xl lg:text-7xl">{title}</h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">{description}</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <ButtonLink href="/signup">Join NextGen <ArrowRight aria-hidden="true" className="size-4" /></ButtonLink>
+            <ButtonLink href="/signup">Join GenZnect <ArrowRight aria-hidden="true" className="size-4" /></ButtonLink>
             <ButtonLink href="/" variant="secondary">Back to home</ButtonLink>
           </div>
         </div>

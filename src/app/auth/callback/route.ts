@@ -1,7 +1,9 @@
 import type { NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
-import { redirectToPath } from "@/lib/http";
+import { accountRoute, getAccountState } from "@/lib/auth/account-state";
+import { redirectToPath, safeInternalPath } from "@/lib/http";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getSessionContext } from "@/lib/supabase/session";
 
 /**
  * Handles every link Supabase Auth emails out:
@@ -13,19 +15,17 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  * origin whether that is localhost, a Vercel preview, or the production domain.
  */
 
-/** Rejects absolute URLs and protocol-relative paths so ?next= cannot be used as an open redirect. */
-function safeNext(value: string | null, fallback: string) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return fallback;
-  return value;
-}
-
 function loginWithError(message: string) {
   return redirectToPath(`/login?error=${encodeURIComponent(message)}`);
 }
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
-  const next = safeNext(searchParams.get("next"), "/dashboard/overview");
+  const requestedNext = safeInternalPath(searchParams.get("next"), "/dashboard/overview");
+  // Older confirmation emails nested the final destination inside /onboarding.
+  const next = requestedNext.startsWith("/onboarding?")
+    ? safeInternalPath(new URL(requestedNext, "https://genznect.invalid").searchParams.get("next"), "/dashboard/overview")
+    : requestedNext;
 
   // Supabase reports link-level failures (expired, already used) as query params.
   const errorDescription = searchParams.get("error_description") ?? searchParams.get("error");
@@ -47,5 +47,19 @@ export async function GET(request: NextRequest) {
     return loginWithError("That link is missing its confirmation code. Please request a new one.");
   }
 
-  return redirectToPath(next);
+  // Recovery needs its authenticated session but must be allowed to reach the
+  // password form even if the profile is pending, suspended, or unavailable.
+  if (next === "/reset-password") {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return loginWithError("Your recovery session could not be established. Please request a new link.");
+    return redirectToPath(next);
+  }
+
+  const session = await getSessionContext(supabase);
+  if (!session) return loginWithError("Your confirmation succeeded, but a session could not be established. Please sign in.");
+
+  const state = getAccountState(session);
+  // Keep invitation paths and other token-bearing destinations out of logs.
+  console.info("[auth] confirmation redirect", { userId: session.user.id, accountState: state });
+  return redirectToPath(accountRoute(state, next));
 }

@@ -86,9 +86,9 @@ export function DashboardPreview() {
             <div className="grid min-h-[590px] lg:grid-cols-[220px_1fr]">
               <aside className="hidden border-r border-slate-200 bg-white p-5 lg:block">
                 <div className="flex items-center gap-3">
-                  <div className="grid size-10 place-items-center rounded-xl bg-slate-950 text-[13px] font-bold text-white">NG</div>
+                  <div className="grid size-10 place-items-center rounded-xl bg-slate-950 text-[13px] font-bold text-white">GZ</div>
                   <div>
-                    <p className="text-[15px] font-semibold text-slate-950">NextGen</p>
+                    <p className="text-[15px] font-semibold text-slate-950">GenZnect</p>
                     <p className="text-[13px] text-slate-500">{activeRole} space</p>
                   </div>
                 </div>

@@ -14,7 +14,7 @@ export function FinalCTA() {
           <p className="mx-auto mt-6 max-w-2xl text-[17px] leading-8 text-slate-300">Join a community built to help students, founders, institutions, and organizations discover what they can build together.</p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <ButtonLink href="/signup" variant="dark">Create Your Profile <ArrowRight aria-hidden="true" className="size-4" /></ButtonLink>
-            <ButtonLink href="/discover" className="border border-white/20 bg-transparent text-white shadow-none hover:bg-white/10">Explore NextGen</ButtonLink>
+            <ButtonLink href="/discover" className="border border-white/20 bg-transparent text-white shadow-none hover:bg-white/10">Explore GenZnect</ButtonLink>
           </div>
         </div>
       </div>
