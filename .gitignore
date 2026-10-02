@@ -32,3 +32,10 @@ next-env.d.ts
 # here does not untrack it. See the untrack command in the pre-deploy report.
 /work/
 /outputs/
+
+# Local backend dependencies and test artifacts
+/backend/.venv/
+/.venv/
+/backend/.deps/
+__pycache__/
+.pytest_cache/

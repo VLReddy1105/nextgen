@@ -1,2 +1,4 @@
-import { redirect } from "next/navigation";
-export default function Page() { redirect("/dashboard/profile"); }
+import { StudentSettings } from "@/components/student/StudentExtras";
+export default function Page() {
+  return <StudentSettings />;
+}

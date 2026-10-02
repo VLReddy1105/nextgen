@@ -1,3 +1,4 @@
+import { mapAuthError } from "@/lib/auth/errors";
 import type { NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { accountRoute, getAccountState } from "@/lib/auth/account-state";
@@ -29,37 +30,41 @@ export async function GET(request: NextRequest) {
 
   // Supabase reports link-level failures (expired, already used) as query params.
   const errorDescription = searchParams.get("error_description") ?? searchParams.get("error");
-  if (errorDescription) return loginWithError(errorDescription);
+  if (errorDescription) return loginWithError("LINK_INVALID");
 
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
 
-  const supabase = await createSupabaseServerClient();
+  try {
+    const supabase = await createSupabaseServerClient();
 
-  if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) return loginWithError(error.message);
-  } else if (tokenHash && type) {
-    const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
-    if (error) return loginWithError(error.message);
-  } else {
-    return loginWithError("That link is missing its confirmation code. Please request a new one.");
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) return loginWithError(mapAuthError(error).code);
+    } else if (tokenHash && type) {
+      const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
+      if (error) return loginWithError(mapAuthError(error).code);
+    } else {
+      return loginWithError("LINK_INVALID");
+    }
+
+    // Recovery needs its authenticated session but must be allowed to reach the
+    // password form even if the profile is pending, suspended, or unavailable.
+    if (next === "/reset-password") {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return loginWithError("LINK_INVALID");
+      return redirectToPath(next);
+    }
+
+    const session = await getSessionContext(supabase);
+    if (!session) return loginWithError("LINK_INVALID");
+
+    const state = getAccountState(session);
+    // Keep invitation paths and other token-bearing destinations out of logs.
+    console.info("[auth] confirmation redirect", { userId: session.user.id, accountState: state });
+    return redirectToPath(accountRoute(state, next));
+  } catch (error) {
+    return loginWithError(mapAuthError(error).code);
   }
-
-  // Recovery needs its authenticated session but must be allowed to reach the
-  // password form even if the profile is pending, suspended, or unavailable.
-  if (next === "/reset-password") {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return loginWithError("Your recovery session could not be established. Please request a new link.");
-    return redirectToPath(next);
-  }
-
-  const session = await getSessionContext(supabase);
-  if (!session) return loginWithError("Your confirmation succeeded, but a session could not be established. Please sign in.");
-
-  const state = getAccountState(session);
-  // Keep invitation paths and other token-bearing destinations out of logs.
-  console.info("[auth] confirmation redirect", { userId: session.user.id, accountState: state });
-  return redirectToPath(accountRoute(state, next));
 }

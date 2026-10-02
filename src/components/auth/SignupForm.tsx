@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { safeInternalPath } from "@/lib/http";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { PrimaryRole } from "@/types";
+import { mapAuthError } from "@/lib/auth/errors";
 import { PasswordField } from "./PasswordField";
 
 const SIGNUP_ROLES: { value: PrimaryRole; label: string; description: string }[] = [
@@ -62,7 +63,7 @@ export function SignupForm() {
       });
 
       if (error) {
-        setErrors({ form: error.message });
+        setErrors({ form: mapAuthError(error).message });
         return;
       }
 
@@ -75,8 +76,8 @@ export function SignupForm() {
 
       router.push("/verify-email");
       router.refresh();
-    } catch {
-      setErrors({ form: "Could not reach Supabase. Check your connection and try again." });
+    } catch (error) {
+      setErrors({ form: mapAuthError(error).message });
     } finally {
       setLoading(false);
     }

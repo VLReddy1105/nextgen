@@ -1,0 +1,10 @@
+{
+ "skills":["Python","Django","FastAPI","Flask","SQL","PostgreSQL","Java","Spring","Spring Boot","Hibernate","JavaScript","TypeScript","React","Next.js","Node.js","HTML","CSS","C","C++","C#","Go","Rust","Kotlin","Swift","Docker","Kubernetes","AWS","Azure","Git","Linux","TensorFlow","PyTorch","Pandas","NumPy","Machine Learning","Data Science","Cybersecurity","Networking","Figma","UI/UX","Research","Design"],
+ "roles":["Python Developer","Backend Developer","Frontend Developer","Full Stack Developer","Java Developer","Software Engineer","Data Analyst","Data Scientist","ML Engineer","DevOps Engineer","UI/UX Designer","Product Manager","Security Analyst","Research Intern"],
+ "industries":["Software / IT","SaaS","FinTech","EdTech","Healthcare Technology","E-commerce","AI / ML","Cybersecurity","Consulting","Manufacturing","Research","Media","Climate Technology"],
+ "locations":["Hyderabad","Bengaluru","Chennai","Pune","Mumbai","Delhi NCR","Ahmedabad","Vadodara","Kolkata","Kochi","Coimbatore","Jaipur","Indore","Chandigarh","London","Singapore","Dubai","New York","San Francisco","Berlin"],
+ "languages":["English","Hindi","Telugu","Tamil","Kannada","Malayalam","Marathi","Gujarati","Bengali","Punjabi","Urdu","French","German","Spanish","Mandarin","Japanese","Korean","Arabic"],
+ "interests":["Backend Development","Frontend Development","Full Stack Development","AI / ML","Data Science","Cybersecurity","Product","Startups","Research","Open Source","International Careers","Design","Cloud","Entrepreneurship","Community Building"],
+ "project_categories":["Web Development","Mobile Development","AI / ML","Data Science","Cybersecurity","Research","Design","Open Source","Social Impact","Hardware","Other"],
+ "soft_skills":["Communication","Leadership","Teamwork","Problem Solving","Time Management","Critical Thinking","Adaptability","Public Speaking"]
+}

@@ -283,6 +283,8 @@ export type Database = {
       finish_onboarding: { Args: { p_role: Database["public"]["Enums"]["primary_account_role"]; p_name: string; p_headline?: string | null; p_organization_name?: string | null; p_website?: string | null; p_field_of_study?: string | null; p_degree?: string | null; p_skills?: string[]; p_interests?: string[]; p_portfolio_url?: string | null; p_linkedin_url?: string | null; p_github_url?: string | null; p_expertise?: string[] }; Returns: undefined }
       can_manage_university: { Args: { p_university_id: string }; Returns: boolean }
       enroll_university_student: { Args: { p_university_id: string; p_email: string; p_token_hash: string; p_student_name?: string | null; p_student_identifier?: string | null; p_program?: string | null; p_department?: string | null }; Returns: string }
+      eco_campus_invite: { Args: { p_university_id: string; p_email: string; p_token_hash: string; p_student_name?: string | null; p_student_identifier?: string | null; p_program?: string | null; p_department?: string | null }; Returns: string }
+      eco_invite: { Args: { p_kind: string; p_id: string; p_email: string; p_role?: string }; Returns: string }
       accept_university_invitation: { Args: { p_token_hash: string }; Returns: string }
       revoke_university_student: { Args: { p_university_id: string; p_student_user_id: string }; Returns: undefined }
       cancel_university_invitation: { Args: { p_university_id: string; p_invitation_id: string }; Returns: undefined }
