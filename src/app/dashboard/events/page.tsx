@@ -1,3 +1,11 @@
-import { CalendarDays } from "lucide-react";
-import { DashboardPlaceholder } from "@/components/dashboard/DashboardPlaceholder";
-export default function Page() { return <DashboardPlaceholder eyebrow="Events" title="Events" description="Events hosted by the GenZnect network will appear here." emptyTitle="No events yet" emptyDescription="Event publishing and registration are planned for a later release." icon={CalendarDays} action="View communities" href="/dashboard/communities" />; }
+import { getSessionContext } from "@/lib/supabase/session";
+import { StudentListing } from "@/components/student/StudentModules";
+import { RoleWorkspace } from "@/components/ecosystem/RoleWorkspace";
+export default async function Page() {
+  const s = await getSessionContext();
+  return s?.profile?.primary_role === "student" ? (
+    <StudentListing kind="events" />
+  ) : (
+    <RoleWorkspace module="events" />
+  );
+}

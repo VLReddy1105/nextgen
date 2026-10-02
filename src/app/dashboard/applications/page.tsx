@@ -1,3 +1,11 @@
-import { FileCheck2 } from "lucide-react";
-import { DashboardPlaceholder } from "@/components/dashboard/DashboardPlaceholder";
-export default function Page() { return <DashboardPlaceholder eyebrow="Applications" title="Applications" description="Track opportunities you apply to through GenZnect." emptyTitle="No applications yet" emptyDescription="Application tracking will be available when opportunity publishing opens." icon={FileCheck2} action="View projects" href="/dashboard/projects" />; }
+import { getSessionContext } from "@/lib/supabase/session";
+import { StudentListing } from "@/components/student/StudentModules";
+import { RoleWorkspace } from "@/components/ecosystem/RoleWorkspace";
+export default async function Page() {
+  const s = await getSessionContext();
+  return s?.profile?.primary_role === "student" ? (
+    <StudentListing kind="applications" />
+  ) : (
+    <RoleWorkspace module="applications" />
+  );
+}

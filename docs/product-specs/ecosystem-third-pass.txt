@@ -1,0 +1,2526 @@
+We are now entering the THIRD and most important implementation pass for GenZnect.
+
+This pass is about making the entire multi-role ecosystem work as one connected product around the Student Workspace.
+
+============================================================
+PROJECT BOUNDARY — ABSOLUTE
+============================================================
+
+Repository:
+
+C:\Users\Jai\nextgen
+
+Branch:
+
+feature/student-login
+
+Work ONLY inside this repository.
+
+DO NOT:
+
+- switch branches
+- merge
+- push
+- force reset
+- modify unrelated repositories
+- modify landing/marketing pages unless absolutely required for routing
+- break existing Supabase authentication
+- replace historical migrations
+- expose secrets
+- hardcode user IDs
+- use service-role secrets in browser code
+- bypass RLS
+- create fake production data
+- implement AI automation yet
+- implement external scraping
+- silently auto-assign roles/permissions from browser input
+
+Authentication, current migrations, Next.js and FastAPI are already working.
+
+Preserve them.
+
+============================================================
+PRIMARY PRODUCT GOAL
+============================================================
+
+GenZnect must behave as one connected career/community ecosystem.
+
+The Student Workspace is the center of the product.
+
+Supporting roles exist to create meaningful activity that flows into Student experience.
+
+Core actors:
+
+STUDENT
+COMPANY
+UNIVERSITY
+MENTOR
+
+Students also interact with OTHER STUDENTS through:
+
+Projects
+Communities
+Posts
+Events
+Mentorship
+Invitations
+Notifications
+
+The implementation must connect these roles through real database-backed relationships.
+
+Do NOT build isolated dashboards that do not affect other users.
+
+============================================================
+MAIN CONNECTION MODEL
+============================================================
+
+Think in terms of DOMAIN EVENTS.
+
+Example:
+
+Company creates opportunity
+        ↓
+Opportunity service
+        ↓
+Eligibility + matching
+        ↓
+Relevant Student Opportunities
+        ↓
+Overview recommendations
+        ↓
+optional Student notification
+
+Student applies
+        ↓
+Application created
+        ↓
+Company applicant list updates
+        ↓
+Company receives activity/notification
+
+Company changes status
+        ↓
+Application history
+        ↓
+Student notification
+        ↓
+Applications page
+        ↓
+Overview
+        ↓
+Right contextual panel
+
+
+University publishes event
+        ↓
+Audience resolution
+        ↓
+Eligible Students
+        ↓
+Events
+        ↓
+Notifications
+        ↓
+Today panel
+
+
+Company/Student creates project
+        ↓
+Invite Student
+        ↓
+Invitation record
+        ↓
+Student notification
+        ↓
+Student opens project invitation
+        ↓
+Accept / Decline
+        ↓
+Membership created ONLY after acceptance
+
+
+Community mention
+        ↓
+Post/comment event
+        ↓
+Notification
+        ↓
+Student opens exact post/comment
+
+
+Mentor completes Python profile
+        ↓
+Student matching
+        ↓
+Python Student sees relevant Mentor higher
+
+
+Profile skill change
+        ↓
+Student Data Core
+        ↓
+Opportunities matching
+        ↓
+Projects matching
+        ↓
+Communities matching
+        ↓
+Mentor matching
+        ↓
+AI Tools preview
+
+============================================================
+DO NOT USE SILENT MEMBERSHIP ASSIGNMENT
+============================================================
+
+Current Project functionality allows an owner to type an email and assign a member.
+
+This is NOT acceptable as the final behavior.
+
+Typing a Student email must create:
+
+PENDING INVITATION
+
+NOT:
+
+ACTIVE MEMBERSHIP
+
+Required flow:
+
+Project Owner
+    ↓
+Invite by email
+    ↓
+pending invitation stored
+    ↓
+Student notification
+    ↓
+Student opens project
+    ↓
+Accept / Decline
+    ↓
+only on Accept:
+membership created
+
+Invitation must contain:
+
+id
+resource type
+resource id
+inviter
+recipient
+requested role
+status
+created_at
+expires_at where appropriate
+accepted_at / declined_at
+
+Use secure server-side authorization.
+
+Never trust arbitrary recipient_user_id from browser without validation.
+
+============================================================
+PROJECT INVITE CODE / LINK
+============================================================
+
+Add a professional invitation mechanism.
+
+Project owner may generate:
+
+Invite link
+or
+short invite code
+
+Example:
+
+GZ-PROJ-8F3K2
+
+Requirements:
+
+- random/unpredictable
+- expiring where appropriate
+- tied to exact project
+- cannot grant Project Head automatically
+- server validates
+- disabled/revoked codes cannot be reused
+- optional usage limit
+- logged-in Student sees project preview before joining
+- Accept confirmation required
+
+Do not expose raw database IDs as invite codes.
+
+============================================================
+PROJECT OWNERSHIP TYPES
+============================================================
+
+Projects may originate from:
+
+1. Student
+2. Company
+3. University
+4. Community
+
+Store source/owner context clearly.
+
+Example:
+
+owner_type
+owner_id / organization context
+visibility
+join_policy
+
+Permissions depend on context.
+
+============================================================
+PROJECT VISIBILITY
+============================================================
+
+Student-created projects must support:
+
+PRIVATE
+PUBLIC
+
+PRIVATE:
+
+- only owner
+- accepted invited members
+- authorized managers
+- cannot appear in public discovery
+
+PUBLIC:
+
+- visible in Discover Projects
+- users can view project summary
+- joining still follows configured join policy
+- public visibility does NOT mean anyone can edit
+
+Join policies:
+
+INVITE_ONLY
+REQUEST_TO_JOIN
+OPEN_JOIN
+
+Default Student project:
+
+PRIVATE + INVITE_ONLY
+
+Student may later make it Public.
+
+============================================================
+STUDENT PROJECT EXPERIENCE
+============================================================
+
+Students must be able to:
+
+Create project
+
+Fields:
+
+Project name *
+Short description *
+Detailed description
+Skills / technologies *
+Project category
+Visibility *
+Join policy *
+GitHub/project URL optional
+Expected team size optional
+
+Then:
+
+Overview
+Tasks
+Team
+Files/Links
+Activity
+
+Project creator becomes:
+
+Project Head
+
+Project Head can:
+
+edit project
+invite members
+approve join requests
+create tasks
+assign tasks
+change permitted task ownership
+remove members where permitted
+change visibility
+generate/revoke invite codes
+
+Member can:
+
+view project
+view team
+view assigned tasks
+update permitted tasks
+add allowed activity/files
+leave project where allowed
+
+============================================================
+PROJECT TASKS
+============================================================
+
+Task workflow:
+
+TO DO
+IN PROGRESS
+REVIEW
+DONE
+
+Fields:
+
+title
+description
+assignee
+status
+priority
+due date
+created_by
+updated_at
+
+Permissions:
+
+Project Head:
+full permitted project task management
+
+Assignee:
+update own permitted task state/content
+
+Unrelated user:
+no access
+
+Progress:
+
+derive from task completion.
+
+Never hardcode progress.
+
+============================================================
+PROJECT ACTIVITY
+============================================================
+
+Create real activity records for:
+
+project created
+member invited
+invitation accepted
+member joined
+task created
+task assigned
+task status changed
+visibility changed
+file/link added
+
+Show in Project Activity.
+
+============================================================
+COMPANY WORKSPACE — COMPLETE MINIMUM PRODUCT
+============================================================
+
+Current Company workspace is too simple.
+
+Redesign it to match the quality of the Student Workspace.
+
+Recommended navigation:
+
+Overview
+
+Opportunities
+  - All Opportunities
+  - Create Opportunity
+  - Draft
+  - Published
+  - Closed
+
+Applications
+  - All Applications
+  - Applied
+  - Reviewed
+  - Shortlisted
+  - Interview
+  - Selected
+  - Rejected
+
+Projects
+  - Company Projects
+  - Create Project
+  - Invitations / Requests
+
+Communities
+
+Events
+
+Divider
+
+Company Profile
+Settings
+
+============================================================
+COMPANY OVERVIEW
+============================================================
+
+Show real data:
+
+Published Opportunities
+Active Applications
+Open Projects
+Communities
+Upcoming Events
+
+Recent:
+
+new applications
+accepted project invitations
+application status changes
+event registrations
+
+No fake numbers.
+
+============================================================
+COMPANY OPPORTUNITIES
+============================================================
+
+Full UI required.
+
+Company can:
+
+create
+save draft
+publish
+edit
+close
+view applicants
+
+Form:
+
+Title *
+Opportunity type *
+Description *
+Required skills *
+Nice-to-have skills
+Work mode *
+Location when relevant
+Experience level *
+Duration
+Application deadline *
+Openings
+Eligibility
+Audience/context
+Status
+
+Types:
+
+Job
+Internship
+Project Opportunity
+Competition
+Hiring Drive
+
+Searchable skill autocomplete.
+
+Example:
+
+typing:
+py
+
+suggest:
+
+Python
+
+Typing:
+fas
+
+suggest:
+
+FastAPI
+
+Do not accept a full skill sentence as one chip.
+
+============================================================
+STUDENT OPPORTUNITY CONNECTION
+============================================================
+
+Company publishes:
+
+Python Backend Developer Intern
+
+Required skills:
+
+Python
+Django
+FastAPI
+PostgreSQL
+
+Then Student with matching profile must see:
+
+Opportunity in Opportunities
+Recommendation score/reason
+Overview recommendation
+
+Possible explanation:
+
+Matched skills:
+Python
+Django
+PostgreSQL
+
+Do not use LLM.
+
+Use deterministic matching.
+
+============================================================
+APPLICATION FLOW
+============================================================
+
+Student:
+
+Opportunity
+→ Apply
+
+Backend:
+
+validate eligibility
+validate deadline
+prevent duplicate application
+create application
+create timeline
+notify owning organization where appropriate
+
+Company:
+
+Applications
+→ applicant visible
+
+Company can:
+
+Reviewed
+Shortlisted
+Interview
+Selected
+Rejected
+
+Student cannot change employer-owned status.
+
+Status change:
+
+history entry
+Student notification
+Student Applications
+Overview
+Right panel
+badge/count
+
+============================================================
+COMPANY PROJECT CONNECTION
+============================================================
+
+Company creates project.
+
+Example:
+
+Python Internship Internal Project
+
+Company invites:
+
+Student A email
+
+Expected:
+
+Company:
+Pending invitation
+
+Student:
+Bell +1
+Notification:
+"testing company invited you to join Python Internship Internal Project"
+
+Student opens:
+
+Project preview
+
+Shows:
+
+Company
+Description
+Skills
+Requested role
+Visibility
+Team summary
+
+Buttons:
+
+Accept
+Decline
+
+After Accept:
+
+Company Project:
+Student appears as member
+
+Student Projects:
+Project appears under My Projects
+
+Overview:
+Recent Project may update
+
+Activity:
+Invitation accepted
+
+============================================================
+COMPANY NOTIFICATIONS
+============================================================
+
+Company should receive meaningful activity, not generic noise.
+
+Examples:
+
+new application
+application withdrawn
+project invitation accepted
+join request received
+event registration milestones if useful
+
+DO NOT notify Company simply because a new Student registered on GenZnect.
+
+============================================================
+UNIVERSITY WORKSPACE — COMPLETE MINIMUM PRODUCT
+============================================================
+
+Recommended navigation:
+
+Overview
+
+Students
+  - Enrolled Students
+  - Pending Invitations
+  - Connection Requests
+
+Opportunities
+
+Events
+
+Projects
+
+Communities
+
+Announcements / Resources
+
+Divider
+
+University Profile
+Settings
+
+============================================================
+UNIVERSITY IDENTITY / DOMAIN VERIFICATION
+============================================================
+
+We want additional campus features when a Student has an official university email.
+
+BUT:
+
+DO NOT blindly mark a Student verified because their email ends with a domain.
+
+Implement a safe model.
+
+University organization can configure:
+
+verified domain
+
+Example:
+
+paruluniversity.ac.in
+
+Domain must belong to an already verified University organization.
+
+Student signup/profile detects:
+
+@student.verified-university-domain
+
+Then show:
+
+"Your university is on GenZnect."
+
+Possible connection flows:
+
+MODE A — Auto enrollment enabled by University
+
+verified email
++
+domain matches verified University
++
+University allows auto-enrollment
+
+→ create official Student membership after required confirmation
+
+MODE B — Approval required
+
+verified email
++
+domain matches
+
+→ Student sees:
+Request university connection
+
+University sees:
+Pending connection request
+
+University approves
+→ membership active
+
+MODE C — University invitation
+
+University sends invitation
+→ Student accepts
+→ membership active
+
+Never make self-declared institution name grant official verification.
+
+============================================================
+STUDENT UNIVERSITY FEATURES
+============================================================
+
+When officially connected:
+
+Student My University shows:
+
+University name
+verified connection
+degree
+branch
+enrollment state
+campus opportunities
+events
+communities
+resources
+placement updates
+
+Additional campus-specific recommendations may unlock.
+
+Independent Student still retains access to general GenZnect.
+
+============================================================
+UNIVERSITY STUDENT PROGRESS
+============================================================
+
+University may view limited progress for enrolled Students.
+
+PRIVACY RULE:
+
+Do NOT expose a Student's entire private profile to University automatically.
+
+University may see authorized institutional progress such as:
+
+Student name
+program
+year/status
+profile completion %
+joined university projects
+university event participation
+campus opportunity applications where University is the owner/context
+project/team participation
+placement readiness indicators derived from permitted data
+
+Do NOT expose:
+
+private CV
+private personal projects
+private applications to unrelated Companies
+private community activity
+personal links
+private messages
+
+unless explicitly authorized.
+
+============================================================
+UNIVERSITY DASHBOARD
+============================================================
+
+Overview may show:
+
+Students enrolled
+Profile completion distribution
+Campus opportunities
+Upcoming events
+Active university projects
+Campus communities
+
+Use aggregates.
+
+Student progress cards must respect privacy.
+
+============================================================
+UNIVERSITY EVENTS
+============================================================
+
+University can create:
+
+Workshop
+Webinar
+Hackathon
+Hiring Drive
+Career Session
+Networking Event
+Placement Session
+
+Fields:
+
+title *
+description *
+date *
+time *
+mode *
+location/link
+audience
+capacity
+registration deadline
+organizer
+
+Audience:
+
+All university students
+specific program
+specific year
+specific community
+custom eligible group where safely supported
+
+On publish:
+
+eligible Students see Event
+eligible Students may receive notification
+Events badge updates
+Today panel updates when relevant
+
+============================================================
+UNIVERSITY OPPORTUNITIES
+============================================================
+
+University can create:
+
+Campus Internship
+Placement Drive
+Hiring Drive
+Competition
+Campus Project
+
+Student eligibility can respect:
+
+university membership
+degree
+year
+skills
+graduation year
+
+============================================================
+UNIVERSITY ANNOUNCEMENTS
+============================================================
+
+Create lightweight campus announcements if backend can support safely.
+
+Examples:
+
+Placement drive reminder
+Workshop registration
+Resource update
+Campus deadline
+
+Announcement appears in:
+
+My University
+Notifications if important
+
+Do NOT create another massive social platform.
+
+============================================================
+UNIVERSITY COMMUNITIES
+============================================================
+
+University may create:
+
+Campus Coding Club
+AI Club
+Entrepreneurship Cell
+Placement Community
+Alumni Community
+
+Students can:
+
+discover
+join/request
+post where permissions allow
+comment
+reply
+participate in projects/events
+
+============================================================
+MENTOR WORKSPACE
+============================================================
+
+Mentor should not remain a placeholder.
+
+Recommended navigation:
+
+Overview
+
+My Profile
+
+Connections
+  - Requests
+  - My Students
+
+Sessions
+
+Communities
+
+Divider
+
+Settings
+
+Only show modules actually supported.
+
+============================================================
+MENTOR PROFILE
+============================================================
+
+Professional profile:
+
+Full name
+Professional title *
+Company
+Years of experience *
+About *
+Expertise *
+Skills *
+Domains / industries
+LinkedIn
+Portfolio
+Availability
+Mentoring topics
+
+Use normalized selectors.
+
+Example:
+
+Senior Python Developer
+
+Python
+Django
+FastAPI
+PostgreSQL
+Backend Development
+
+============================================================
+MENTOR MATCHING
+============================================================
+
+Student:
+
+Python
+Django
+FastAPI
+Backend
+
+Mentor A:
+
+Python
+Django
+FastAPI
+PostgreSQL
+
+Mentor B:
+
+Java
+Spring
+Hibernate
+
+Mentor A must rank higher.
+
+Return matching reasons.
+
+No LLM.
+
+============================================================
+MENTOR CONNECTION REQUEST
+============================================================
+
+Implement a lightweight real connection flow if schema permits or add a narrow migration.
+
+Student:
+
+View Mentor
+→ Request mentorship
+
+Mentor:
+
+Connection Request
+→ Accept / Decline
+
+After Accept:
+
+Student:
+My Mentors
+
+Mentor:
+My Students / Connections
+
+Create notification on:
+
+request
+acceptance
+decline where appropriate
+
+Do not implement payments.
+
+============================================================
+MENTOR SESSIONS
+============================================================
+
+If session data already exists:
+
+allow simple session records:
+
+topic
+date/time
+status
+notes/reference where permission-safe
+
+Do NOT build a full calendar marketplace.
+
+============================================================
+COMMUNITY SYSTEM
+============================================================
+
+Communities are shared spaces.
+
+Creators may be:
+
+Student
+Company
+University
+Mentor
+
+subject to permission/context rules.
+
+Store:
+
+creator
+owning context
+visibility
+join policy
+category
+tags
+
+============================================================
+COMMUNITY TYPES
+============================================================
+
+Examples:
+
+Python Developers
+AI & ML
+Cybersecurity
+Campus Coding Club
+Startup Builders
+Backend Developers
+Career Community
+
+============================================================
+COMMUNITY VISIBILITY
+============================================================
+
+PUBLIC
+
+discoverable
+
+PRIVATE
+
+requires invitation/request
+
+UNIVERSITY_SCOPED
+
+requires eligible university membership
+
+ORGANIZATION_SCOPED
+
+requires permitted context
+
+============================================================
+COMMUNITY JOIN FLOW
+============================================================
+
+Do not silently add members.
+
+Support:
+
+Open Join
+Request to Join
+Invite Only
+
+Invitation/request:
+
+notification
+Accept/Approve/Decline
+membership created only when authorized
+
+============================================================
+COMMUNITY POSTS
+============================================================
+
+Members with posting permission may create posts.
+
+Post:
+
+author
+community
+content
+attachments/links where allowed
+created_at
+
+Support:
+
+Like
+Comment
+Reply
+Mention
+
+Notification:
+
+reply
+mention
+invitation
+
+Deep-link to exact content.
+
+============================================================
+STUDENT POSTS
+============================================================
+
+Students should be able to create posts INSIDE communities they belong to.
+
+Do NOT add a global unrestricted public post system unless current product architecture supports it cleanly.
+
+A public project may create shareable activity/update cards.
+
+University event/announcement posts belong in University/Community context.
+
+============================================================
+COMMUNITY → PROJECT
+============================================================
+
+Community can host/associate projects.
+
+Example:
+
+Python Developers Community
+→ FastAPI Collaboration Project
+
+Members discover project.
+
+Join policy remains separately enforced.
+
+============================================================
+COMMUNITY → EVENT
+============================================================
+
+Community can host event.
+
+Community event:
+
+appears under Community Events
+eligible Students see it in Events
+notification if configured
+
+============================================================
+STUDENT ↔ STUDENT CONNECTION
+============================================================
+
+We need a second Student account for testing.
+
+Student A can:
+
+create private project
+invite Student B
+
+Student B:
+
+notification
+accept
+becomes project member
+
+Student A:
+
+create community
+
+Student B:
+
+join
+
+Student A posts
+Student B comments
+Student A replies/mentions Student B
+
+Student B receives:
+
+notification
+deep-link
+
+============================================================
+STUDENT PROJECT PUBLIC / PRIVATE
+============================================================
+
+This is important.
+
+Student-created project:
+
+Visibility:
+
+PRIVATE
+PUBLIC
+
+PRIVATE:
+
+only owner/members/invited users
+
+PUBLIC:
+
+visible in Discover Projects
+
+But joining depends on:
+
+OPEN_JOIN
+REQUEST_TO_JOIN
+INVITE_ONLY
+
+Public project does NOT automatically expose private task/file/member data.
+
+Public detail shows only safe project information:
+
+name
+description
+skills
+creator
+team summary
+public progress if configured
+join action
+
+============================================================
+PUBLIC STUDENT PROJECT PORTFOLIO
+============================================================
+
+If Student marks a project as Public and project membership permits it:
+
+show project in Student profile portfolio.
+
+Student can choose:
+
+Show on profile
+Hide from profile
+
+Do not expose private projects.
+
+============================================================
+STUDENT PROFILE — COMPLETE QUALITY PASS
+============================================================
+
+Fix all live-testing defects.
+
+------------------------------------------------------------
+EDUCATION
+------------------------------------------------------------
+
+Add study status:
+
+First Year
+Second Year
+Third Year
+Fourth Year
+Final Year
+Graduated / Completed
+
+If Graduated:
+
+current year not required
+
+Validate:
+
+start year <= graduation year
+
+------------------------------------------------------------
+STEP GATING
+------------------------------------------------------------
+
+Continue must validate the current step.
+
+Required missing:
+
+inline message
+
+"Please complete the required fields before continuing."
+
+Do not navigate forward.
+
+Save Progress:
+
+may save incomplete draft.
+
+------------------------------------------------------------
+SEARCHABLE AUTOCOMPLETE
+------------------------------------------------------------
+
+While typing:
+
+hyd
+→ Hyderabad
+
+ben
+→ Bengaluru
+
+py
+→ Python
+
+djan
+→ Django
+
+fas
+→ FastAPI
+
+back
+→ Backend Developer
+
+soft
+→ Software / IT
+
+eng
+→ English
+
+Use accessible keyboard-controlled dropdowns.
+
+============================================================
+LOCATION MODEL
+============================================================
+
+Separate:
+
+Preferred Locations
+
+from:
+
+Work Mode
+
+Wrong:
+
+Preferred Locations:
+Remote
+Hybrid
+
+Correct:
+
+Preferred Locations:
+Hyderabad
+Bengaluru
+
+Work Mode:
+Remote
+Hybrid
+On-site
+
+============================================================
+NORMALIZED CHIPS
+============================================================
+
+Never store these as one item:
+
+python django fastapi sql
+
+python developer backend developer full stack developer
+
+telugu hindi and english
+
+Correct:
+
+Python
+Django
+FastAPI
+SQL
+
+Python Developer
+Backend Developer
+Full Stack Developer
+
+Telugu
+Hindi
+English
+
+Handle comma/newline/semicolon paste.
+
+Deduplicate case-insensitively.
+
+============================================================
+FIELD CATALOGS
+============================================================
+
+Build separate catalogs.
+
+Skills
+Roles
+Industries
+Locations
+Languages
+Interests
+Project Categories
+
+Do not mix field meanings.
+
+============================================================
+CAREER PREFERENCES
+============================================================
+
+Preferred Roles:
+
+Python Developer
+Backend Developer
+Full Stack Developer
+
+Preferred Industries:
+
+Software / IT
+SaaS
+FinTech
+EdTech
+Healthcare Technology
+E-commerce
+AI / ML
+
+Preferred Locations:
+
+Hyderabad
+Bengaluru
+Chennai
+Pune
+Mumbai
+Delhi NCR
+etc.
+
+Work Mode:
+
+Remote
+Hybrid
+On-site
+
+Availability:
+
+Immediately
+Within 15 days
+Within 30 days
+Within 60 days
+Not currently looking
+
+============================================================
+EXPERIENCE
+============================================================
+
+Do not ask user to type "0".
+
+Use:
+
+No professional experience yet
+
+or structured records:
+
+Role
+Company
+Employment type
+Start date
+End date/Present
+Description
+
+============================================================
+CERTIFICATIONS
+============================================================
+
+Use structured entries:
+
+Certification name
+Issuer
+Issue date/year
+Credential URL
+
+Allow:
+
+No certifications yet
+
+============================================================
+PORTFOLIO PROJECTS
+============================================================
+
+Structured:
+
+Project name
+Role
+Description
+Technologies
+GitHub
+Project link
+
+Connected GenZnect projects remain separate.
+
+============================================================
+LANGUAGES
+============================================================
+
+Individual chips.
+
+Optionally proficiency:
+
+Native
+Professional
+Intermediate
+Basic
+
+if schema supports safely.
+
+============================================================
+LINKS & CV
+============================================================
+
+GitHub
+LinkedIn
+Portfolio
+Resume PDF
+
+Clear upload state.
+
+Private resume.
+
+============================================================
+REVIEW SCREEN
+============================================================
+
+Completely redesign.
+
+No concatenated text dumps.
+
+Use polished summary cards.
+
+Sections:
+
+About
+Education
+Skills
+Interests
+Career Preferences
+Experience
+Projects
+Certifications
+Languages
+Links & CV
+
+Each:
+
+Edit
+
+Use chips and labels.
+
+============================================================
+PROFILE COMPLETION
+============================================================
+
+Completion must reflect meaningful readiness.
+
+Do not punish:
+
+fresher
+no certifications
+
+Example:
+
+Basic info
+Education
+Skills
+Interests
+Career Preferences
+Projects/Experience
+Links/CV
+
+Show missing items.
+
+============================================================
+POST-SAVE PROFILE STATE
+============================================================
+
+After Save Profile:
+
+Profile saved successfully
+
+Recommendations updated
+
+show:
+
+Continue to Workspace
+
+Do not leave confusing duplicate workflow buttons.
+
+Editing remains available.
+
+============================================================
+SHARED DESIGN SYSTEM
+============================================================
+
+The screenshot of Company Project management currently looks too basic.
+
+All authenticated workspaces should use a consistent modern UI.
+
+Create/reuse:
+
+PageHeader
+StatCard
+DataCard
+EmptyState
+SearchToolbar
+FilterBar
+DataTable/CardList
+StatusBadge
+Avatar
+SearchableSelect
+SearchableMultiSelect
+TagInput
+InlineError
+ConfirmDialog
+Drawer
+Modal
+InviteDialog
+MemberCard
+Timeline
+ActivityFeed
+
+Avoid giant empty white rectangles.
+
+Use balanced spacing.
+
+Professional typography.
+
+Responsive.
+
+Clear action hierarchy.
+
+============================================================
+ROLE-SPECIFIC UX
+============================================================
+
+Student:
+
+career + network workspace
+
+Company:
+
+talent/opportunity/project management
+
+University:
+
+student/campus ecosystem management
+
+Mentor:
+
+professional mentorship workspace
+
+Do not make every role look identical.
+
+Keep shared GenZnect visual language.
+
+============================================================
+NOTIFICATION ARCHITECTURE — ALL ROLES
+============================================================
+
+Use one shared notification architecture.
+
+Recipient may be:
+
+Student
+Company user
+University manager
+Mentor
+
+Events:
+
+APPLICATION_SUBMITTED
+APPLICATION_STATUS_CHANGED
+APPLICATION_WITHDRAWN
+
+PROJECT_INVITATION
+PROJECT_INVITATION_ACCEPTED
+PROJECT_JOIN_REQUEST
+
+COMMUNITY_INVITATION
+COMMUNITY_JOIN_REQUEST
+COMMUNITY_MENTION
+COMMUNITY_REPLY
+
+EVENT_PUBLISHED
+EVENT_REMINDER
+EVENT_REGISTRATION
+
+UNIVERSITY_INVITATION
+UNIVERSITY_CONNECTION_APPROVED
+
+MENTOR_REQUEST
+MENTOR_REQUEST_ACCEPTED
+
+TASK_ASSIGNED
+TASK_DUE
+
+============================================================
+NOTIFICATION FIELDS
+============================================================
+
+id
+recipient_user_id
+type
+title
+message
+source_module
+source_entity_id
+action_url
+metadata
+event_key
+read_at
+created_at
+
+Dedupe by event key.
+
+============================================================
+NOTIFICATION DEEP LINKS
+============================================================
+
+Opportunity:
+dashboard/opportunities/{id}
+
+Application:
+dashboard/applications/{id}
+
+Project:
+dashboard/projects/{id}
+
+Community:
+dashboard/communities/{id}
+
+Comment:
+dashboard/communities/{community}?tab=posts#comment-{id}
+
+Event:
+dashboard/events/{id}
+
+Mentor:
+dashboard/mentorship/{id}
+
+University:
+dashboard/my-university
+
+============================================================
+REAL-TIME BEHAVIOR
+============================================================
+
+Current polling/refetch approach may remain.
+
+After mutation:
+
+immediate local refetch
+
+Also:
+
+on window focus
+periodic bounded polling while visible
+
+Do not require WebSockets for this pass.
+
+============================================================
+PERMISSIONS / RLS
+============================================================
+
+Critical.
+
+Every mutation must validate:
+
+authenticated user
+role
+resource ownership
+contextual membership
+requested action permission
+
+Examples:
+
+Company A cannot edit Company B opportunity.
+
+Student cannot alter Company-owned application status.
+
+Student cannot accept another Student's invitation.
+
+University cannot view unrelated Student private data.
+
+Project member cannot grant themselves Project Head.
+
+Private project cannot be fetched by unrelated user.
+
+Private community cannot be fetched by unauthorized user.
+
+Mentor cannot read unrelated private Student profile data.
+
+============================================================
+DATABASE INTEGRITY
+============================================================
+
+Use unique constraints for:
+
+application duplicate
+community membership
+project membership
+event registration
+pending invitation/event dedupe where appropriate
+
+Use transactions/RPC for multi-step actions.
+
+Examples:
+
+Accept project invite:
+
+validate invite
+update invite status
+create membership
+write activity
+write notification
+
+all atomically.
+
+============================================================
+ACTIVITY / AUDIT TRAIL
+============================================================
+
+Record useful activity for:
+
+applications
+projects
+communities
+events
+university membership
+mentor connection
+
+Do not expose internal audit data publicly.
+
+============================================================
+LEFT SIDEBAR QUALITY
+============================================================
+
+Every role must have functional navigation.
+
+Do not display dead menu items.
+
+Student remains:
+
+Overview
+My University
+Opportunities
+Applications
+Projects
+Communities
+Events
+Mentorship
+AI Tools
+Notifications
+
+My Profile
+Settings
+Help & Support
+
+
+Company:
+
+Overview
+Opportunities
+Applications
+Projects
+Communities
+Events
+
+Company Profile
+Notifications
+Settings
+
+
+University:
+
+Overview
+Students
+Invitations
+Opportunities
+Events
+Projects
+Communities
+Announcements
+
+University Profile
+Notifications
+Settings
+
+
+Mentor:
+
+Overview
+My Profile
+Connections
+Sessions
+Communities
+Notifications
+Settings
+
+Hide optional modules if backend functionality truly does not exist.
+
+============================================================
+RIGHT CONTEXT PANEL
+============================================================
+
+Keep Student right panel contextual.
+
+TODAY
+APPLICATIONS
+DEADLINES
+QUICK ACTIONS
+
+Other roles can have relevant compact contextual panels.
+
+Company:
+
+Recent Applicants
+Upcoming Deadlines
+Quick Actions
+
+University:
+
+Upcoming Events
+Pending Connections
+Quick Actions
+
+Mentor:
+
+Pending Requests
+Upcoming Sessions
+Quick Actions
+
+Do not duplicate main dashboard content.
+
+============================================================
+SEARCH / FILTER / SORT
+============================================================
+
+All large lists need:
+
+search
+filter
+sort
+pagination/bounded result sets
+loading
+empty
+error
+retry
+
+============================================================
+NO BAD EMPTY STATES
+============================================================
+
+Do not write:
+
+"Module is being built."
+
+Instead use intentional empty state.
+
+Example Company Opportunities:
+
+"No opportunities yet."
+
+"Publish your first opportunity and start connecting with relevant students."
+
+Button:
+
+Create opportunity
+
+============================================================
+AI TOOLS
+============================================================
+
+Student AI Tools remains:
+
+Launching Soon
+
+Resume Builder
+Job Search Tool
+Tools for You
+
+Skill-based preview only.
+
+NO external AI API.
+
+NO LLM.
+
+NO automation yet.
+
+============================================================
+DEVELOPMENT APPROACH
+============================================================
+
+DO NOT immediately rewrite everything.
+
+First:
+
+1. inspect all role workspaces
+2. inspect FastAPI routes
+3. inspect current RLS
+4. inspect current tables
+5. inspect invitations
+6. inspect project/community membership model
+7. inspect notification system
+8. inspect existing Company/University/Mentor frontend
+9. inspect Student profile implementation
+
+Create:
+
+docs/ecosystem-gap-matrix.md
+
+Matrix:
+
+Feature
+Current State
+Required State
+Existing API
+Existing DB
+Permission model
+Frontend changes
+Backend changes
+Migration required?
+Test
+
+Then implement.
+
+============================================================
+IMPLEMENTATION ORDER
+============================================================
+
+STAGE 1
+Gap analysis
+
+STAGE 2
+Shared forms/design system
+
+STAGE 3
+Invitation architecture improvements
+
+STAGE 4
+Project visibility/join policy/invites
+
+STAGE 5
+Company workspace
+
+STAGE 6
+Company opportunity/application lifecycle
+
+STAGE 7
+University workspace
+
+STAGE 8
+University verification/domain/membership
+
+STAGE 9
+University events/opportunities/connections
+
+STAGE 10
+Mentor workspace/profile/connections
+
+STAGE 11
+Community system polish
+
+STAGE 12
+Student profile validation/autocomplete normalization
+
+STAGE 13
+Student Review/Profile redesign
+
+STAGE 14
+Cross-role notifications
+
+STAGE 15
+Cross-module consistency
+
+STAGE 16
+Responsive/accessibility
+
+STAGE 17
+Tests/build
+
+============================================================
+TEST ACCOUNTS REQUIRED FOR MANUAL ACCEPTANCE
+============================================================
+
+Do NOT hardcode them.
+
+Document how to create:
+
+Student A
+
+Student B
+
+Company A
+
+University A
+
+Mentor Python
+
+Mentor Java
+
+============================================================
+MINIMAL ACCEPTANCE TEST — COMPANY
+============================================================
+
+Company A:
+
+Create Python Internship
+
+Student A:
+
+see opportunity
+
+Student A:
+
+apply
+
+Company A:
+
+see application
+
+Company A:
+
+shortlist
+
+Student A:
+
+notification + timeline
+
+============================================================
+MINIMAL ACCEPTANCE TEST — PROJECT
+============================================================
+
+Company A:
+
+create private project
+
+invite Student A
+
+Student A:
+
+notification
+
+open invite
+
+accept
+
+Company:
+
+Student appears as Member
+
+Student:
+
+project appears in My Projects
+
+============================================================
+MINIMAL ACCEPTANCE TEST — STUDENT PROJECT
+============================================================
+
+Student A:
+
+create private project
+
+invite Student B
+
+Student B:
+
+accept
+
+Student A:
+
+assign task
+
+Student B:
+
+update task
+
+Student A:
+
+make project public
+
+Student B / unrelated Student:
+
+discover public summary
+
+unauthorized user:
+
+cannot edit
+
+============================================================
+MINIMAL ACCEPTANCE TEST — UNIVERSITY
+============================================================
+
+University A:
+
+invite/enrol Student A
+
+Student A:
+
+My University becomes connected
+
+University:
+
+publish workshop
+
+Student:
+
+notification
+
+Student:
+
+register
+
+University:
+
+registration count updates
+
+============================================================
+MINIMAL ACCEPTANCE TEST — UNIVERSITY EMAIL
+============================================================
+
+Verified University domain configured.
+
+Student with matching verified email:
+
+sees:
+
+"Your university is on GenZnect."
+
+Then:
+
+auto-enrol ONLY if University allows it
+
+otherwise:
+
+Request Connection
+
+============================================================
+MINIMAL ACCEPTANCE TEST — MENTOR
+============================================================
+
+Mentor Python:
+
+Python
+Django
+FastAPI
+
+Mentor Java:
+
+Java
+Spring
+
+Student Python profile:
+
+Python Mentor ranks higher
+
+Student:
+
+request mentorship
+
+Mentor:
+
+accept
+
+Student:
+
+My Mentors updates
+
+============================================================
+MINIMAL ACCEPTANCE TEST — COMMUNITY
+============================================================
+
+Student A:
+
+create Python Developers community
+
+Student B:
+
+join
+
+Student A:
+
+post
+
+Student B:
+
+comment
+
+Student A:
+
+reply/mention Student B
+
+Student B:
+
+notification opens exact discussion
+
+============================================================
+VALIDATION TESTS
+============================================================
+
+Profile Continue blocked when required fields missing.
+
+Autocomplete:
+
+hyd → Hyderabad
+py → Python
+back → Backend Developer
+eng → English
+
+Multiple pasted values split correctly.
+
+Incorrect domain values rejected.
+
+Invalid URLs rejected.
+
+Past opportunity deadline rejected.
+
+Duplicate application rejected.
+
+Duplicate event registration rejected.
+
+Duplicate community membership rejected.
+
+Unauthorized role mutation rejected.
+
+Expired invite rejected.
+
+Revoked invite rejected.
+
+============================================================
+RESPONSIVE TESTING
+============================================================
+
+Test:
+
+1440
+1366
+1024
+768
+390
+
+Ensure:
+
+no horizontal overflow
+drawers work
+forms usable
+tables adapt
+cards stack
+right panels reposition
+autocomplete works on mobile
+
+============================================================
+TEST SUITE
+============================================================
+
+Run:
+
+backend tests
+auth regression tests
+database/RLS tests
+frontend component tests
+TypeScript
+lint
+production build
+git diff --check
+
+Add tests for:
+
+project invitation accept/decline
+invite code validation
+public/private projects
+join policies
+company opportunity lifecycle
+application ownership
+university domain connection
+university student privacy
+mentor matching/request
+community permissions
+notification recipients
+profile validation
+chip normalization
+autocomplete
+
+============================================================
+NO SILENT PARTIAL IMPLEMENTATION
+============================================================
+
+If a requested feature cannot be implemented because a backend entity does not exist:
+
+inspect whether a narrow additive migration is appropriate.
+
+Do NOT simply leave a placeholder.
+
+If genuinely deferred:
+
+state exactly why
+show intentional UI
+document it
+
+============================================================
+FINAL REPORT REQUIRED
+============================================================
+
+Create:
+
+docs/ecosystem-implementation-report.md
+
+Report:
+
+1. Branch
+2. Git status
+3. Gap matrix
+4. Database changes
+5. New migrations
+6. Invitation architecture
+7. Project privacy/visibility
+8. Student project flow
+9. Company workspace
+10. Company opportunity/application flow
+11. University workspace
+12. University domain verification
+13. University Student progress/privacy
+14. University events
+15. Mentor workspace
+16. Mentor matching/connections
+17. Community system
+18. Posts/comments/mentions
+19. Shared notifications
+20. Student profile fixes
+21. Autocomplete
+22. Validation/gating
+23. Review redesign
+24. Completion logic
+25. UI/UX improvements
+26. Responsive behavior
+27. Security/RLS
+28. Tests
+29. Lint
+30. TypeScript
+31. Build
+32. Known limitations
+33. Exact manual acceptance sequence
+
+DO NOT PUSH.
+
+DO NOT MERGE.
+
+Leave all work on:
+
+feature/student-login

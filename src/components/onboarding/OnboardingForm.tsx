@@ -39,12 +39,13 @@ export function OnboardingForm({ initialRole, initialName, initialOrganizationNa
       });
       const result = await response.json() as { error?: string };
       if (!response.ok) { setError(result.error ?? "Could not save your profile."); return; }
-      router.push(next); router.refresh();
+      router.push(role === "student" ? "/dashboard/profile?section=about" : next); router.refresh();
     } catch { setError("Could not save your profile. Please try again."); }
     finally { setBusy(false); }
   }
 
   const field = "mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10";
+  if(initialRole === "student") return <form onSubmit={submit} className="space-y-6"><p className="text-sm font-semibold text-blue-700">Student account setup</p><h1 className="text-3xl font-semibold">Start with the basics.</h1><p className="text-slate-600">Next, build your profile one step at a time. You can save progress and return whenever you’re ready.</p><label className="block font-semibold">Full name<input required minLength={2} maxLength={160} autoComplete="name" className={field} value={name} onChange={e=>setName(e.target.value)}/></label><label className="block font-semibold">Short headline (optional)<input maxLength={240} className={field} value={headline} onChange={e=>setHeadline(e.target.value)}/></label>{error?<p role="alert" className="text-red-700">{error}</p>:null}<button disabled={busy} className="rounded-full bg-blue-600 px-7 py-3 font-semibold text-white disabled:opacity-50">{busy?"Saving…":"Continue to your profile →"}</button></form>;
   return <form onSubmit={submit} className="space-y-7">
     <div><p className="text-sm font-semibold text-blue-700">Account setup</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Make GenZnect yours.</h1><p className="mt-2 text-slate-600">Set up your account to enter the right workspace.</p></div>
     <fieldset><legend className="text-base font-semibold text-slate-900">How are you joining?</legend><div className="mt-3 grid gap-3 sm:grid-cols-2">

@@ -7,6 +7,7 @@ import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { safeInternalPath } from "@/lib/http";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { mapAuthError } from "@/lib/auth/errors";
 import { PasswordField } from "./PasswordField";
 
 interface LoginFormProps {
@@ -35,15 +36,15 @@ export function LoginForm({ notice }: LoginFormProps) {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
 
       if (error) {
-        setErrors({ form: error.message });
+        setErrors({ form: mapAuthError(error).message });
         return;
       }
 
       router.push(safeInternalPath(new URLSearchParams(window.location.search).get("next"), "/dashboard/overview"));
       // Without this the server components above still render the signed-out tree.
       router.refresh();
-    } catch {
-      setErrors({ form: "Could not reach Supabase. Check your connection and try again." });
+    } catch (error) {
+      setErrors({ form: mapAuthError(error).message });
     } finally {
       setLoading(false);
     }

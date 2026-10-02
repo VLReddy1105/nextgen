@@ -10,6 +10,10 @@ insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values
   ('f0000000-0000-0000-0000-000000000003','profile-stranger@example.test',now(),'{"role":"student","full_name":"Stranger Name"}');
 
 set role authenticated;
+set request.jwt.claim.sub = 'f0000000-0000-0000-0000-000000000002';
+select public.finish_onboarding('student','Member Name',null,null,null,null,null);
+set app.genznect_finish_onboarding = '';
+set app.genznect_onboarding_org = '';
 set request.jwt.claim.sub = 'f0000000-0000-0000-0000-000000000001';
 do $$ begin
   if (select count(*) from public.profiles) <> 1 then
@@ -27,6 +31,13 @@ begin
   project_id := public.create_project('Profile Read Test','profile-read-test-project');
   perform public.assign_community_member_by_email(community_id,'profile-member@example.test','member');
   perform public.assign_project_member_by_email(project_id,'profile-member@example.test','member');
+  if (select count(*) from public.list_space_member_names('projects',project_id)) <> 1 then
+    raise exception 'Invitation silently assigned a member';
+  end if;
+  perform set_config('request.jwt.claim.sub','f0000000-0000-0000-0000-000000000002',true);
+  perform public.eco_invitation_decide((select id from public.workspace_invitations where kind='projects' and entity_id=project_id and status='pending'),true);
+  perform public.eco_invitation_decide((select id from public.workspace_invitations where kind='communities' and entity_id=community_id and status='pending'),true);
+  perform set_config('request.jwt.claim.sub','f0000000-0000-0000-0000-000000000001',true);
   if (select count(*) from public.list_space_member_names('communities',community_id)) <> 2
      or (select count(*) from public.list_space_member_names('communities',community_id) where full_name = 'Member Name') <> 1
      or (select count(*) from public.list_space_member_names('projects',project_id)) <> 2 then

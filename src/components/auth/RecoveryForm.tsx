@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { mapAuthError } from "@/lib/auth/errors";
 import { PasswordField } from "./PasswordField";
 
 interface RecoveryFormProps { mode: "forgot" | "reset"; }
@@ -43,7 +44,7 @@ export function RecoveryForm({ mode }: RecoveryFormProps) {
           redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
         });
         if (requestError) {
-          setError(requestError.message);
+          setError(mapAuthError(requestError).message);
           return;
         }
         setStatus(`If an account exists for ${email.trim()}, a recovery link is on its way.`);
@@ -53,18 +54,14 @@ export function RecoveryForm({ mode }: RecoveryFormProps) {
       // Requires the recovery session created by /auth/callback.
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) {
-        setError(
-          updateError.message.toLowerCase().includes("session")
-            ? "This recovery link has expired or was already used. Request a new one."
-            : updateError.message,
-        );
+        setError(mapAuthError(updateError).message);
         return;
       }
       setStatus("Password updated. Taking you to your dashboard…");
       router.push("/dashboard/overview");
       router.refresh();
-    } catch {
-      setError("Could not reach Supabase. Check your connection and try again.");
+    } catch (error) {
+      setError(mapAuthError(error).message);
     } finally {
       setLoading(false);
     }

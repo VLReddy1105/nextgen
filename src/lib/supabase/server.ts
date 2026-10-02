@@ -2,17 +2,13 @@ import "server-only";
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getSupabaseConfig } from "./config";
 import type { Database } from "./types";
 
 export async function createSupabaseServerClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !anonKey) {
-    throw new Error("Supabase server credentials are not configured.");
-  }
-
+  // Mark cookie-backed auth as request-time work before reading configuration.
   const cookieStore = await cookies();
+  const { url, anonKey } = getSupabaseConfig();
 
   return createServerClient<Database>(url, anonKey, {
     cookies: {
