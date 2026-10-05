@@ -4,7 +4,8 @@ import type { Workspace, Item, Module, StudentProfile } from "./types";
 export const workspaceApi = {
   create: (kind: string, body: unknown) =>
     api<{ id: string }>(`/spaces/${kind}`, "POST", body),
-  load: () => api<Workspace>("/workspace"),
+  load: (signal?: AbortSignal) =>
+    api<Workspace>("/workspace", "GET", undefined, { signal }),
   profile: () => api<StudentProfile>("/students/me"),
   saveProfile: (body: unknown) =>
     api<StudentProfile>("/students/me", "PATCH", body),

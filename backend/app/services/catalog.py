@@ -1,3 +1,4 @@
+from app.services.concurrency import gather
 from app.core.errors import APIError
 from app.matching.rank import rank, eligible
 from app.services.students import student_core
@@ -16,11 +17,11 @@ async def catalog(current, kind, profile=None):
     profile = profile if profile is not None else await student_core(current)
     repo = current.repo
     if kind == "mentorship":
-        records = await repo.rows("mentor_profiles")
-        names = {
-            v["user_id"]: v
-            for v in await repo.rpc("workspace_directory", {"p_kind": "mentors"})
-        }
+        records, directory = await gather(
+            repo.rows("mentor_profiles"),
+            repo.rpc("workspace_directory", {"p_kind": "mentors"}),
+        )
+        names = {v["user_id"]: v for v in directory}
         records = [
             {
                 **r,
@@ -33,19 +34,34 @@ async def catalog(current, kind, profile=None):
             for r in records
             if r["user_id"] in names
         ]
+    elif kind == "opportunities":
+        records, organizations, saved_rows, applied_rows = await gather(
+            repo.rows(kind, order="created_at.desc"),
+            repo.rows("organizations"),
+            repo.rows("saved_opportunities", user_id=f"eq.{current.id}"),
+            repo.rows("applications", student_id=f"eq.{current.id}"),
+        )
+    elif kind in ("projects", "communities"):
+        records, memberships = await gather(
+            repo.rows(kind, order="created_at.desc"),
+            repo.rows(
+                "project_members" if kind == "projects" else "community_members",
+                user_id=f"eq.{current.id}",
+                status="eq.active",
+            ),
+        )
+    elif kind == "events":
+        records, registration_rows = await gather(
+            repo.rows(kind, order="created_at.desc"),
+            repo.rows("event_registrations", user_id=f"eq.{current.id}"),
+        )
     else:
         records = await repo.rows(kind, order="created_at.desc")
     if kind == "opportunities":
         records = [r for r in records if eligible(r)]
-        orgs = {r["id"]: r for r in await repo.rows("organizations")}
-        saved = {
-            r["opportunity_id"]
-            for r in await repo.rows("saved_opportunities", user_id=f"eq.{current.id}")
-        }
-        applied = {
-            r["opportunity_id"]
-            for r in await repo.rows("applications", student_id=f"eq.{current.id}")
-        }
+        orgs = {r["id"]: r for r in organizations}
+        saved = {r["opportunity_id"] for r in saved_rows}
+        applied = {r["opportunity_id"] for r in applied_rows}
         records = [
             {
                 **r,
@@ -59,11 +75,6 @@ async def catalog(current, kind, profile=None):
         ]
     if kind in ("projects", "communities"):
         field = "project_id" if kind == "projects" else "community_id"
-        memberships = await repo.rows(
-            "project_members" if kind == "projects" else "community_members",
-            user_id=f"eq.{current.id}",
-            status="eq.active",
-        )
         joined = {r[field] for r in memberships}
         records = [
             {
@@ -96,7 +107,7 @@ async def catalog(current, kind, profile=None):
     if kind == "events":
         registrations = {
             r["event_id"]
-            for r in await repo.rows("event_registrations", user_id=f"eq.{current.id}")
+            for r in registration_rows
         }
         records = [
             {**r, "registered": r["id"] in registrations}
@@ -115,10 +126,14 @@ async def catalog(current, kind, profile=None):
 
 
 async def applications(current):
-    records = await current.repo.rows(
-        "applications",
-        **({"student_id": f"eq.{current.id}"} if current.role == "student" else {}),
-        order="updated_at.desc",
+    records, opportunity_rows, organization_rows = await gather(
+        current.repo.rows(
+            "applications",
+            **({"student_id": f"eq.{current.id}"} if current.role == "student" else {}),
+            order="updated_at.desc",
+        ),
+        current.repo.rows("opportunities"),
+        current.repo.rows("organizations"),
     )
     names = (
         {
@@ -128,9 +143,9 @@ async def applications(current):
         if current.role != "student"
         else {}
     )
-    opportunities = {r["id"]: r for r in await current.repo.rows("opportunities")}
+    opportunities = {r["id"]: r for r in opportunity_rows}
     organizations = {
-        r["id"]: r["name"] for r in await current.repo.rows("organizations")
+        r["id"]: r["name"] for r in organization_rows
     }
     return [
         {

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Annotated
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import httpx
 from app.core.config import load_settings
@@ -21,6 +21,7 @@ class Actor:
 
 async def actor(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+    request: Request = None,
 ):
     if credentials is None:
         raise APIError("UNAUTHENTICATED", "Sign in to continue.", 401)
@@ -29,13 +30,19 @@ async def actor(
         raise APIError(
             "CONFIG_MISSING", "The authentication service is not configured.", 503
         )
-    repo = SupabaseRepository(config, credentials.credentials)
+    client = getattr(request.app.state, "supabase_http", None) if request else None
+    repo = SupabaseRepository(config, credentials.credentials, client=client)
     # Supabase verifies the token; never trust decoded unsigned claims or browser role.
     try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
+        if client is not None:
             response = await client.get(
-                config.supabase_url + "/auth/v1/user", headers=repo.headers
+                config.supabase_url + "/auth/v1/user", headers=repo.headers, timeout=10
             )
+        else:
+            async with httpx.AsyncClient(timeout=10, follow_redirects=False) as standalone:
+                response = await standalone.get(
+                    config.supabase_url + "/auth/v1/user", headers=repo.headers
+                )
     except httpx.RequestError:
         raise APIError(
             "AUTH_UNAVAILABLE", "Authentication is temporarily unavailable.", 503

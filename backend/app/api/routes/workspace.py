@@ -1,19 +1,30 @@
-import asyncio
+from dataclasses import replace
 from datetime import datetime, timezone
 from fastapi import APIRouter
 from app.api.dependencies import Current
 from app.services.students import student_core
 from app.services.catalog import catalog, applications
+from app.repositories.workspace_reads import WorkspaceReads
+from app.services.concurrency import gather
 
 router = APIRouter(prefix="/api/v1/workspace", tags=["workspace"])
 
 
 @router.get("")
 async def workspace(current: Current):
+    reads = WorkspaceReads(current.repo)
+    try:
+        return await aggregate_workspace(replace(current, repo=reads))
+    finally:
+        await reads.close()
+
+
+async def aggregate_workspace(current):
     if current.role != "student":
         return await role_workspace(current)
-    await current.repo.rpc("workspace_refresh_reminders", {})
-    profile = await student_core(current)
+    _, profile = await gather(
+        current.repo.rpc("workspace_refresh_reminders", {}), student_core(current)
+    )
     (
         opportunities,
         projects,
@@ -23,7 +34,7 @@ async def workspace(current: Current):
         apps,
         notifications,
         sessions,
-    ) = await asyncio.gather(
+    ) = await gather(
         catalog(current, "opportunities", profile),
         catalog(current, "projects", profile),
         catalog(current, "communities", profile),
@@ -90,23 +101,37 @@ async def role_workspace(current):
             "checklist": [],
         },
     }
-    orgs = await current.repo.rows("organizations", created_by=f"eq.{current.id}")
-    opps = await current.repo.rows(
-        "opportunities", created_by=f"eq.{current.id}", order="created_at.desc"
+    (
+        orgs,
+        opps,
+        projects,
+        communities,
+        events,
+        registrations,
+        apps,
+        notices,
+        sessions,
+        activity,
+    ) = await gather(
+        current.repo.rows("organizations", created_by=f"eq.{current.id}"),
+        current.repo.rows(
+            "opportunities", created_by=f"eq.{current.id}", order="created_at.desc"
+        ),
+        catalog(current, "projects", profile),
+        catalog(current, "communities", profile),
+        current.repo.rows(
+            "events", organizer_id=f"eq.{current.id}", order="starts_at.desc"
+        ),
+        current.repo.rows("event_registrations"),
+        applications(current),
+        current.repo.rows(
+            "notifications", recipient_user_id=f"eq.{current.id}", order="created_at.desc"
+        ),
+        current.repo.rows("mentor_sessions", mentor_id=f"eq.{current.id}"),
+        current.repo.rows("ecosystem_activity", order="created_at.desc", limit="30"),
     )
-    projects = await catalog(current, "projects", profile)
-    communities = await catalog(current, "communities", profile)
-    events = await current.repo.rows(
-        "events", organizer_id=f"eq.{current.id}", order="starts_at.desc"
-    )
-    registrations = await current.repo.rows("event_registrations")
     for e in events:
         e["member_count"] = sum(r["event_id"] == e["id"] for r in registrations)
-    apps = await applications(current)
-    notices = await current.repo.rows(
-        "notifications", recipient_user_id=f"eq.{current.id}", order="created_at.desc"
-    )
-    sessions = await current.repo.rows("mentor_sessions", mentor_id=f"eq.{current.id}")
     extra = {}
     if current.role == "university" and orgs and orgs[0]["verified"]:
         progress = await current.repo.rpc(
@@ -117,9 +142,6 @@ async def role_workspace(current):
         connections = await current.repo.rpc("eco_connections", {})
         extra["connections"] = sum(c["status"] == "accepted" for c in connections)
         extra["sessions"] = len(sessions)
-    activity = await current.repo.rows(
-        "ecosystem_activity", order="created_at.desc", limit="30"
-    )
     return {
         "profile": profile,
         "organizations": orgs,

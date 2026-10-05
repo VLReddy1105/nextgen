@@ -14,8 +14,10 @@ export async function api<T>(
   path: string,
   method = "GET",
   body?: unknown,
+  options: RequestInit = {},
 ): Promise<T> {
   const response = await apiRequest(path, {
+    ...options,
     method,
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -48,7 +50,8 @@ export async function apiRequest(
       },
       cache: "no-store",
     });
-  } catch {
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
     throw new WorkspaceError(
       "The workspace service is unavailable. Please retry shortly.",
       "SERVICE_UNAVAILABLE",
