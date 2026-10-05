@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 
 import type { User } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "./server";
@@ -18,7 +19,8 @@ export interface SessionContext {
  * Always uses getUser() rather than getSession() so the token is verified
  * against the auth server instead of trusted from the cookie.
  */
-export async function getSessionContext(
+// React cache is scoped to one server render, never shared between users or requests.
+export const getSessionContext = cache(async function getSessionContext(
   client?: Awaited<ReturnType<typeof createSupabaseServerClient>>,
 ): Promise<SessionContext | null> {
   const supabase = client ?? await createSupabaseServerClient();
@@ -43,4 +45,4 @@ export async function getSessionContext(
   else if (!profile) console.error("[auth] profile missing for authenticated user", { userId: user.id });
 
   return { user, profile, profileError: error ? { code: error.code, message: error.message } : null };
-}
+});

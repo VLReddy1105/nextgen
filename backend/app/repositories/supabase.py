@@ -11,7 +11,8 @@ class Repository(Protocol):
 
 
 class SupabaseRepository:
-    def __init__(self, settings, token: str):
+    def __init__(self, settings, token: str, *, client=None):
+        self.client = client
         self.url = settings.supabase_url
         self.headers = {
             "apikey": settings.public_key,
@@ -20,14 +21,17 @@ class SupabaseRepository:
 
     async def request(self, method, path, *, params=None, data=None):
         try:
-            async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
-                response = await client.request(
-                    method,
-                    self.url + path,
-                    headers={**self.headers, "Prefer": "return=representation"},
-                    params=params,
-                    json=data,
-                )
+            options = dict(
+                headers={**self.headers, "Prefer": "return=representation"},
+                params=params,
+                json=data,
+            )
+            if self.client is not None:
+                response = await self.client.request(method, self.url + path, **options)
+            else:
+                # Standalone callers/tests can still own a short-lived client.
+                async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
+                    response = await client.request(method, self.url + path, **options)
         except httpx.RequestError:
             raise APIError(
                 "SERVICE_UNAVAILABLE",

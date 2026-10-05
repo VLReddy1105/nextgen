@@ -1,5 +1,7 @@
 import logging
 import time
+from contextlib import asynccontextmanager
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +13,22 @@ from app.api.routes import relationships, ecosystem
 
 configure_logging()
 
-app = FastAPI(title="GenZnect Workspace API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app):
+    # One transport pool per worker, never shared user credentials or responses.
+    async with httpx.AsyncClient(
+        timeout=15,
+        follow_redirects=False,
+        limits=httpx.Limits(max_connections=100, max_keepalive_connections=30),
+    ) as client:
+        app.state.supabase_http = client
+        try:
+            yield
+        finally:
+            app.state.supabase_http = None
+
+
+app = FastAPI(title="GenZnect Workspace API", version="1.0.0", lifespan=lifespan)
 app.include_router(relationships.router)
 app.include_router(ecosystem.router)
 app.add_middleware(

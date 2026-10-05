@@ -1,3 +1,6 @@
+from app.services.concurrency import gather
+
+
 def completion(profile):
     checks = [
         (
@@ -51,16 +54,16 @@ def completion(profile):
 
 
 async def student_core(actor):
-    rows = await actor.repo.rows("student_details", profile_id=f"eq.{actor.id}")
+    rows, memberships, projects = await gather(
+        actor.repo.rows("student_details", profile_id=f"eq.{actor.id}"),
+        actor.repo.rows(
+            "university_student_memberships",
+            student_user_id=f"eq.{actor.id}",
+            status="eq.active",
+        ),
+        actor.repo.rows("project_members", user_id=f"eq.{actor.id}", status="eq.active"),
+    )
     details = rows[0] if rows else {}
-    memberships = await actor.repo.rows(
-        "university_student_memberships",
-        student_user_id=f"eq.{actor.id}",
-        status="eq.active",
-    )
-    projects = await actor.repo.rows(
-        "project_members", user_id=f"eq.{actor.id}", status="eq.active"
-    )
     profile = {
         **details.get("workspace_profile", {}),
         **details,
