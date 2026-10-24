@@ -40,6 +40,7 @@ export function StudentNotifications() {
               </Link>
               {!n.read_at ? <span className="sw-chip">Unread</span> : null}
             </div>
+            <p className="sw-muted mt-2">{n.message}</p>
             <p className="sw-muted mt-2">
               {new Date(n.created_at).toLocaleString()}
             </p>
@@ -292,12 +293,16 @@ export function StudentAITools() {
 export function StudentSettings() {
   const { data } = useWorkspace();
   const [enabled, setEnabled] = useState(true),
+    [visibility, setVisibility] = useState("private"),
     [loaded, setLoaded] = useState(false),
     [error, setError] = useState("");
   useEffect(() => {
-    api<{ in_app_notifications: boolean }>("/settings")
+    api<{ in_app_notifications: boolean; profile_visibility: string }>(
+      "/settings",
+    )
       .then((r) => {
         setEnabled(r.in_app_notifications);
+        setVisibility(r.profile_visibility);
         setLoaded(true);
       })
       .catch((e) => setError(e.message));
@@ -319,19 +324,27 @@ export function StudentSettings() {
         </div>
       </section>
       <section id="verification" className="sw-card mt-4">
-        <h2 className="sw-section">Email & university verification</h2>
+        <h2 className="sw-section">
+          {data?.profile.primary_role === "student"
+            ? "Email & university verification"
+            : "Account verification"}
+        </h2>
         <p className="sw-muted mt-3">
           Email verified ✓ ·{" "}
-          {data?.profile.memberships.length
-            ? "University connected"
-            : "Using GenZnect independently"}
+          {data?.profile.primary_role !== "student"
+            ? `${data?.profile.primary_role} account`
+            : data?.profile.memberships.length
+              ? "University connected"
+              : "Using GenZnect independently"}
         </p>
-        <Link
-          href="/dashboard/my-university"
-          className="mt-4 inline-block text-blue-700"
-        >
-          Manage university connection →
-        </Link>
+        {data?.profile.primary_role === "student" && (
+          <Link
+            href="/dashboard/my-university"
+            className="mt-4 inline-block text-blue-700"
+          >
+            Manage university connection →
+          </Link>
+        )}
       </section>
       <section className="sw-card mt-4">
         <h2 className="sw-section">Notifications</h2>
@@ -353,7 +366,7 @@ export function StudentSettings() {
                 run={() =>
                   api("/settings", "PUT", {
                     in_app_notifications: enabled,
-                    profile_visibility: "private",
+                    profile_visibility: visibility,
                   })
                 }
               >
@@ -377,9 +390,10 @@ export function StudentSettings() {
       <section className="sw-card mt-4">
         <h2 className="sw-section">Privacy & connected accounts</h2>
         <p className="sw-muted mt-3">
-          Your resume is private. LinkedIn/GitHub links are editable in your
-          profile; automatic imports and external account connections are not
-          enabled.
+          {data?.profile.primary_role === "student"
+            ? "Your resume is private. Edit supported links in your profile."
+            : "Your profile and organization details can be edited from your role profile page."}{" "}
+          Automatic imports and external account connections are not enabled.
         </p>
       </section>
     </>

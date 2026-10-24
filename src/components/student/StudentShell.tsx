@@ -1,5 +1,7 @@
 "use client";
 import Link from "next/link";
+import { roleModules, moduleLabel } from "@/lib/role-workspaces";
+import { RoleContext } from "@/components/ecosystem/RoleContext";
 import { usePathname } from "next/navigation";
 import { useRef, useState } from "react";
 import {
@@ -127,41 +129,7 @@ const links = [
 ];
 function roleLinks(role: string) {
   if (role === "student") return links;
-  const keys =
-    role === "mentor"
-      ? [
-          "overview",
-          "profile",
-          "connections",
-          "sessions",
-          "communities",
-          "notifications",
-          "settings",
-        ]
-      : role === "university"
-        ? [
-            "overview",
-            "students",
-            "opportunities",
-            "events",
-            "projects",
-            "communities",
-            "announcements",
-            "notifications",
-            "profile",
-            "settings",
-          ]
-        : [
-            "overview",
-            "opportunities",
-            "applications",
-            "projects",
-            "communities",
-            "events",
-            "notifications",
-            "profile",
-            "settings",
-          ];
+  const keys = roleModules[role] || [];
   return keys.map((key) => {
     const base = links.find((l) => l.key === key) || {
       key,
@@ -174,7 +142,15 @@ function roleLinks(role: string) {
         sub: ["All opportunities", "Draft", "Published", "Closed"],
         values: ["", "draft", "published", "closed"],
       };
-    if(key==='projects'||key==='communities')return {...base,sub:[key==='projects'?'My Projects':'My Communities',key==='projects'?'Discover Projects':'Discover Communities'],values:['mine','discover']};
+    if (key === "projects" || key === "communities")
+      return {
+        ...base,
+        sub: [
+          key === "projects" ? "My Projects" : "My Communities",
+          key === "projects" ? "Discover Projects" : "Discover Communities",
+        ],
+        values: ["mine", "discover"],
+      };
     if (key === "profile")
       return {
         ...base,
@@ -187,7 +163,7 @@ function roleLinks(role: string) {
                 ? "Founder Profile"
                 : "Company Profile",
       };
-    return base;
+    return { ...base, name: moduleLabel(role, key) };
   });
 }
 function AccountMenu({ name, initials }: { name: string; initials: string }) {
@@ -366,37 +342,7 @@ function Sidebar({
 function ContextPanel() {
   const { data } = useWorkspace();
   if (!data) return null;
-  if (data.profile.primary_role !== "student")
-    return (
-      <aside aria-label="Workspace context" className="sw-context">
-        <section className="sw-card">
-          <h2 className="sw-section">Recent updates</h2>
-          {data.notifications.slice(0, 5).map((n) => (
-            <Link className="mt-4 block text-sm" href={n.action_url} key={n.id}>
-              {n.title}
-            </Link>
-          ))}
-          {!data.notifications.length && (
-            <p className="sw-muted mt-3">
-              Updates from your connections will appear here.
-            </p>
-          )}
-        </section>
-        <section className="sw-card">
-          <h2 className="sw-section">Next steps</h2>
-          <Link
-            className="sw-button mt-4"
-            href={
-              data.profile.primary_role === "mentor"
-                ? "/dashboard/connections"
-                : "/dashboard/projects"
-            }
-          >
-            Manage connections
-          </Link>
-        </section>
-      </aside>
-    );
+  if (data.profile.primary_role !== "student") return <RoleContext />;
   const now = new Date(),
     today = now.toDateString();
   const schedule = [

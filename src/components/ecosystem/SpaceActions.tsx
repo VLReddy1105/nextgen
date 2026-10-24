@@ -7,6 +7,7 @@ import { Action } from "@/components/student/StudentModules";
 import { useWorkspace } from "@/components/student/WorkspaceProvider";
 import { CreateSpace } from "@/components/student/CreateSpace";
 import { Editor } from "./Editor";
+import { canManageSpace } from "@/lib/role-workspaces";
 export function SpaceActions({
   kind,
   item,
@@ -18,7 +19,7 @@ export function SpaceActions({
 }) {
   const { data } = useWorkspace(),
     [code, setCode] = useState("");
-  const manager = ["project_head", "captain"].includes(item.my_role || "");
+  const manager = canManageSpace(kind, item.my_role);
   const pending =
     item.invitations?.filter(
       (i) =>
@@ -115,9 +116,18 @@ export function SpaceActions({
                 },
               ]}
               initial={{ requested_role: "member", email: "" }}
-              save={(v) =>
-                api(`/relationships/${kind}/${item.id}/invitations`, "POST", v)
-              }
+              save={(v) => {
+                if (
+                  String(v.email).trim().toLowerCase() ===
+                  data?.profile.email.toLowerCase()
+                )
+                  throw new Error("You are already a member of this space.");
+                return api(
+                  `/relationships/${kind}/${item.id}/invitations`,
+                  "POST",
+                  v,
+                );
+              }}
             />
             {item.invitations?.map((i) => (
               <div key={i.id} className="sw-muted mt-3">

@@ -16,6 +16,7 @@ async def listing(current: Student):
 @router.get("/{id}")
 async def detail(id: UUID, current: Current):
     record = await one(current.repo, "events", id)
+    record["can_manage"] = record["organizer_id"] == current.id
     record["member_count"] = (
         len(await current.repo.rows("event_registrations", event_id=f"eq.{id}"))
         if record["organizer_id"] == current.id

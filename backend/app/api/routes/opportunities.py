@@ -52,6 +52,9 @@ async def listing(
 @router.get("/{id}")
 async def detail(id: UUID, current: Current):
     record = await one(current.repo, "opportunities", id)
+    organization = await one(current.repo, "organizations", record["organization_id"])
+    record["organization"] = organization["name"]
+    record["can_manage"] = record["created_by"] == current.id
     record["applied"] = bool(
         await current.repo.rows(
             "applications", student_id=f"eq.{current.id}", opportunity_id=f"eq.{id}"

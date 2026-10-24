@@ -11,6 +11,8 @@ import type { Item, Module, Post } from "@/lib/api/types";
 import { useWorkspace } from "./WorkspaceProvider";
 import { ResourceEditor } from "./ResourceEditor";
 import { Action, Empty, ItemCard, label } from "./StudentModules";
+import { canEditPublication } from "@/lib/role-workspaces";
+import { MutationRefresh } from "@/components/ecosystem/MutationRefresh";
 
 export function StudentDetail({ kind, id }: { kind: Module; id: string }) {
   const [item, setItem] = useState<Item | null>(null),
@@ -80,10 +82,29 @@ export function StudentDetail({ kind, id }: { kind: Module; id: string }) {
         <SpaceActions kind={kind} item={item} tab={tab} />
       )}
       {(kind === "opportunities" || kind === "events") &&
-        data?.profile.primary_role !== "student" && (
+        data &&
+        canEditPublication(kind, data.profile.id, item) && (
           <Publishing kind={kind} item={item} />
         )}
-      {kind === "applications" && data?.profile.primary_role !== "student" && (
+      {kind === "opportunities" && item.can_manage && (
+        <Link
+          className="sw-button mt-5"
+          href={`/dashboard/applications?opportunity=${id}`}
+        >
+          View applicants for this opportunity
+        </Link>
+      )}
+      {kind === "events" && item.can_manage && (
+        <section className="sw-card mt-5">
+          <h2 className="sw-section">Registrations</h2>
+          <p className="sw-muted mt-3">
+            {item.member_count || 0} confirmed registrations
+            {item.capacity ? ` / ${item.capacity} capacity` : ""}. Student
+            registration and cancellation update this count.
+          </p>
+        </section>
+      )}
+      {kind === "applications" && item.can_manage && (
         <>
           <section className="sw-card mt-5">
             <h2 className="sw-section">{item.applicant?.full_name}</h2>
@@ -169,18 +190,20 @@ export function StudentDetail({ kind, id }: { kind: Module; id: string }) {
       {(kind === "projects" || kind === "communities") &&
       item.joined &&
       tab !== "tasks" ? (
-        <ResourceEditor
-          item={item}
-          kind={kind}
-          tab={tab}
-          manager={
-            !!item.team?.some(
-              (m) =>
-                m.user_id === data?.profile.id &&
-                ["project_head", "captain"].includes(m.role),
-            )
-          }
-        />
+        <MutationRefresh.Provider value={load}>
+          <ResourceEditor
+            item={item}
+            kind={kind}
+            tab={tab}
+            manager={
+              !!item.team?.some(
+                (m) =>
+                  m.user_id === data?.profile.id &&
+                  ["project_head", "captain"].includes(m.role),
+              )
+            }
+          />
+        </MutationRefresh.Provider>
       ) : null}
       {kind === "applications" ? (
         <section className="sw-card mt-5">
@@ -376,7 +399,9 @@ export function StudentDetail({ kind, id }: { kind: Module; id: string }) {
               )}
             </div>
           ) : (
-            <CommunityFeed item={item} id={id} />
+            <MutationRefresh.Provider value={load}>
+              <CommunityFeed item={item} id={id} />
+            </MutationRefresh.Provider>
           )}
         </section>
       ) : null}
@@ -395,8 +420,9 @@ export function StudentDetail({ kind, id }: { kind: Module; id: string }) {
             ))}
           </div>
           <p className="sw-muted mt-5">
-            Mentor discovery is read-only in this release. Ratings and session
-            availability are shown only when supported by real records.
+            Request an available mentor using the action above. Your request and
+            the mentor’s decision appear in My Mentors. Sessions appear after an
+            accepted connection is scheduled by the mentor.
           </p>
         </section>
       ) : null}

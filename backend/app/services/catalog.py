@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from app.services.concurrency import gather
 from app.core.errors import APIError
 from app.matching.rank import rank, eligible
@@ -17,9 +18,10 @@ async def catalog(current, kind, profile=None):
     profile = profile if profile is not None else await student_core(current)
     repo = current.repo
     if kind == "mentorship":
-        records, directory = await gather(
+        records, directory, connections = await gather(
             repo.rows("mentor_profiles"),
             repo.rpc("workspace_directory", {"p_kind": "mentors"}),
+            repo.rows("mentor_connections", student_id=f"eq.{current.id}"),
         )
         names = {v["user_id"]: v for v in directory}
         records = [
@@ -30,6 +32,7 @@ async def catalog(current, kind, profile=None):
                 "title": names[r["user_id"]]["full_name"],
                 "description": r.get("bio"),
                 "tags": list(dict.fromkeys(r["expertise"] + r.get("skills", []))),
+                "connection_status": next((c["status"] for c in connections if c["mentor_id"] == r["user_id"]), None),
             }
             for r in records
             if r["user_id"] in names
@@ -42,13 +45,15 @@ async def catalog(current, kind, profile=None):
             repo.rows("applications", student_id=f"eq.{current.id}"),
         )
     elif kind in ("projects", "communities"):
-        records, memberships = await gather(
+        records, memberships, invitations, requests = await gather(
             repo.rows(kind, order="created_at.desc"),
             repo.rows(
                 "project_members" if kind == "projects" else "community_members",
                 user_id=f"eq.{current.id}",
                 status="eq.active",
             ),
+            repo.rows("workspace_invitations", recipient_user_id=f"eq.{current.id}"),
+            repo.rows("space_join_requests", user_id=f"eq.{current.id}"),
         )
     elif kind == "events":
         records, registration_rows = await gather(
@@ -81,6 +86,9 @@ async def catalog(current, kind, profile=None):
                 **r,
                 "title": r.get("title", r.get("name")),
                 "joined": r["id"] in joined,
+                "my_role": next((m["role"] for m in memberships if m[field] == r["id"]), None),
+                "join_request_status": next((q["status"] for q in requests if q["kind"] == kind and q["entity_id"] == r["id"] and q["status"] == "pending"), None),
+                "invitation_status": next((i["status"] for i in invitations if i["kind"] == kind and i["entity_id"] == r["id"] and i["status"] == "pending" and i["expires_at"] > datetime.now(timezone.utc).isoformat()), None),
                 "show_on_profile": next(
                     (
                         m.get("show_on_profile", False)

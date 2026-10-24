@@ -523,4 +523,151 @@ await denied("select workspace_task($1,'todo')", [campusTask]);
 console.log(
   "PASS: decline/expiry/cancel cannot create membership; public portfolio opt-in respects profile privacy; campus revocation removes task access and blocks legacy mutation.",
 );
+// Role workspace acceptance flows: same records observed by both participants.
+await as(company);
+const companyProject = await scalar(
+  "select eco_space_save('projects',$1::jsonb)",
+  [
+    JSON.stringify({
+      ...draft,
+      slug: "company-role-flow",
+      organization_id: companyOrg,
+    }),
+  ],
+);
+const companyInvite = await scalar(
+  "select eco_invite('projects',$1,'a@example.test')",
+  [companyProject],
+);
+await as(a);
+assert.equal(
+  await scalar("select status from workspace_invitations where id=$1", [
+    companyInvite,
+  ]),
+  "pending",
+);
+await db.query("select eco_invitation_decide($1,true)", [companyInvite]);
+assert.equal(
+  await scalar("select workspace_member('projects',$1)", [companyProject]),
+  true,
+);
+await as(company);
+assert.equal(
+  await scalar(
+    "select count(*) from project_members where project_id=$1 and user_id=$2 and status='active'",
+    [companyProject, a],
+  ),
+  1,
+);
+assert.equal(
+  await scalar("select status from workspace_invitations where id=$1", [
+    companyInvite,
+  ]),
+  "accepted",
+);
+await as(university);
+const announcement = await scalar(
+  "select eco_announcement($1,'Campus careers','Connected students only','',true)",
+  [campus],
+);
+await as(a);
+assert.equal(
+  await scalar("select count(*) from campus_announcements where id=$1", [
+    announcement,
+  ]),
+  1,
+);
+assert.equal(
+  await scalar(
+    "select count(*) from notifications where type='campus_announcement' and source_entity_id=$1",
+    [announcement],
+  ),
+  1,
+);
+await as(c);
+assert.equal(
+  await scalar("select count(*) from campus_announcements where id=$1", [
+    announcement,
+  ]),
+  0,
+);
+await denied(
+  "select eco_announcement($1,'Not allowed','Not my campus','',true)",
+  [campus],
+);
+await as(a);
+const conversation = await scalar(
+  "select eco_space_save('communities',$1::jsonb)",
+  [
+    JSON.stringify({
+      ...draft,
+      slug: "role-conversation",
+      title: "Role conversation",
+    }),
+  ],
+);
+const communityInvite = await scalar(
+  "select eco_invite('communities',$1,'b@example.test')",
+  [conversation],
+);
+await as(b);
+await db.query("select eco_invitation_decide($1,true)", [communityInvite]);
+await as(a);
+const post = await scalar(
+  "select workspace_post($1,'Welcome member',null,null,$2::uuid[])",
+  [conversation, [b]],
+);
+await as(b);
+assert.equal(
+  await scalar(
+    "select count(*) from notifications where type='community_mention' and source_entity_id=$1",
+    [conversation],
+  ),
+  1,
+);
+const comment = await scalar(
+  "select workspace_post($1,'Thanks for inviting me',$2)",
+  [conversation, post],
+);
+await db.query("select workspace_react($1,true)", [post]);
+await db.query("select workspace_react($1,true)", [post]);
+assert.equal(
+  await scalar("select count(*) from community_reactions where post_id=$1", [
+    post,
+  ]),
+  1,
+);
+await as(a);
+assert.equal(
+  await scalar(
+    "select count(*) from notifications where type='community_reply' and source_entity_id=$1",
+    [conversation],
+  ),
+  1,
+);
+await db.query("select workspace_post($1,'Happy to help',$2,$3)", [
+  conversation,
+  post,
+  comment,
+]);
+await as(b);
+assert.equal(
+  await scalar(
+    "select count(*) from notifications where type='community_reply' and source_entity_id=$1",
+    [conversation],
+  ),
+  1,
+);
+await as(c);
+assert.equal(
+  await scalar("select count(*) from community_posts where id=$1", [post]),
+  0,
+);
+await denied("select workspace_post($1,'Unrelated account',$2)", [
+  conversation,
+  post,
+]);
+console.log(
+  "PASS: Company project invitation reflects accepted membership on both sides; campus announcement isolation/delivery; community membership/post/comment/reply/mention/reaction and unrelated-user denial.",
+);
 await db.close();
