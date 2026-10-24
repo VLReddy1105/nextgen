@@ -1,18 +1,22 @@
 "use client";
 import Link from "next/link";
 import { StatusBadge } from "./ui";
-import { useState,useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useWorkspace } from "@/components/student/WorkspaceProvider";
 import { CreateSpace } from "@/components/student/CreateSpace";
 import { Publishing } from "./Publishing";
+import { roleModules, moduleLabel } from "@/lib/role-workspaces";
+import { Invitations } from "./Invitations";
 export function RoleWorkspace({ module = "overview" }: { module?: string }) {
   const { data } = useWorkspace(),
     search = useSearchParams();
   const [q, setQ] = useState(""),
     [sort, setSort] = useState("newest"),
     [filter, setFilter] = useState(search.get("view") || "");
-  useEffect(()=>{setFilter(search.get("view")||"");},[search]);
+  useEffect(() => {
+    setFilter(search.get("view") || "");
+  }, [search]);
   if (!data) return null;
   const role = data.profile.primary_role,
     rows =
@@ -38,18 +42,43 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
         <div className="my-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Object.entries(data.counts)
             .filter(
-              ([k]) =>
-                k !== "notifications" &&
-                (role !== "mentor" ||
-                  ["communities", "connections", "sessions"].includes(k)),
+              ([k]) => k !== "notifications" && roleModules[role]?.includes(k),
             )
             .map(([k, n]) => (
               <Link className="sw-card" href={"/dashboard/" + k} key={k}>
-                <p className="sw-muted capitalize">{k.replaceAll("_", " ")}</p>
+                <p className="sw-muted capitalize">{moduleLabel(role, k)}</p>
                 <p className="mt-2 text-3xl font-semibold">{n}</p>
               </Link>
             ))}
         </div>
+        <Invitations />
+        {(role === "company" || role === "university") && (
+          <section className="sw-card mb-5">
+            <h2 className="sw-section">Recent applicants</h2>
+            <p className="sw-muted mt-2">
+              {data.applications.length} applications ·{" "}
+              {
+                data.opportunities.filter((o) => o.status === "published")
+                  .length
+              }{" "}
+              published opportunities
+            </p>
+            {data.applications.slice(0, 5).map((a) => (
+              <Link
+                key={a.id}
+                className="mt-3 block text-sm text-blue-700"
+                href={`/dashboard/applications/${a.id}`}
+              >
+                {a.full_name || "Applicant"} · {a.title} · {a.status}
+              </Link>
+            ))}
+            {!data.applications.length && (
+              <Link className="sw-button mt-4" href="/dashboard/opportunities">
+                Create or manage opportunities
+              </Link>
+            )}
+          </section>
+        )}
         <section className="sw-card">
           <h2 className="sw-section">Recent activity</h2>
           {data.activity?.length ? (
@@ -66,8 +95,8 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
             ))
           ) : (
             <p className="sw-muted mt-3">
-              Activity will appear as students respond to your opportunities and
-              invitations.
+              Activity appears when you and your connected members take part in
+              projects, communities, and supported role workflows.
             </p>
           )}
         </section>
@@ -79,7 +108,11 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
         (!filter ||
           r.status === filter ||
           (filter === "mine" && r.joined) ||
-          (filter === "discover" && !r.joined)) &&
+          (filter === "discover" && !r.joined) ||
+          (filter === "invited" && r.invitation_status === "pending")) &&
+        (!search.get("opportunity") ||
+          module !== "applications" ||
+          r.opportunity_id === search.get("opportunity")) &&
         `${r.full_name || ""} ${r.title || r.name} ${r.description || ""} ${r.status || ""}`
           .toLowerCase()
           .includes(q.toLowerCase()),
@@ -91,13 +124,31 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
     );
   return (
     <>
-      <h1 className="sw-title capitalize">{module}</h1>
+      <h1 className="sw-title capitalize">{moduleLabel(role, module)}</h1>
       <p className="sw-muted mt-3">
         Manage your {module} and follow real updates from your network.
       </p>
+      {role === "university" &&
+        ["opportunities", "events"].includes(module) &&
+        !data.organizations?.some(
+          (o) => o.type === "university" && o.verified,
+        ) && (
+          <p className="sw-card mt-5">
+            Your official university account must be verified before publishing
+            campus content.
+          </p>
+        )}
+      {["projects", "communities"].includes(module) && (
+        <Invitations kind={module} />
+      )}
       {["projects", "communities"].includes(module) ? (
         <CreateSpace kind={module as "projects" | "communities"} />
-      ) : ["events", "opportunities"].includes(module) && role !== "mentor" ? (
+      ) : (module === "events" ||
+          (module === "opportunities" && data.organizations?.length)) &&
+        (role !== "university" ||
+          data.organizations?.some(
+            (o) => o.type === "university" && o.verified,
+          )) ? (
         <details className="sw-card mt-5">
           <summary className="font-semibold">
             Create {module === "events" ? "event" : "opportunity"}
@@ -120,19 +171,22 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
           onChange={(e) => setFilter(e.target.value)}
         >
           <option value="">All statuses</option>
-          {[
-            "draft",
-            "published",
-            "closed",
-            "applied",
-            "reviewed",
-            "shortlisted",
-            "interview",
-            "selected",
-            "rejected",
-            "withdrawn",
-            "active",
-          ].map((s) => (
+          {(module === "applications"
+            ? [
+                "applied",
+                "reviewed",
+                "shortlisted",
+                "interview",
+                "selected",
+                "rejected",
+                "withdrawn",
+              ]
+            : module === "events"
+              ? ["draft", "published", "cancelled"]
+              : module === "opportunities"
+                ? ["draft", "published", "closed"]
+                : ["mine", "discover", "invited"]
+          ).map((s) => (
             <option key={s}>{s}</option>
           ))}
         </select>
@@ -161,6 +215,36 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
               <StatusBadge value={r.status || r.visibility || "Active"} />
             </div>
             <p className="sw-muted mt-3 line-clamp-2">{r.description}</p>
+            {module === "opportunities" && (
+              <p className="sw-muted mt-2">
+                {
+                  data.applications.filter((a) => a.opportunity_id === r.id)
+                    .length
+                }{" "}
+                applicants · Open to edit or review applicants
+              </p>
+            )}
+            {module === "applications" && (
+              <p className="sw-muted mt-2">
+                {r.organization} · Applied{" "}
+                {r.created_at
+                  ? new Date(r.created_at).toLocaleDateString()
+                  : "date unavailable"}
+              </p>
+            )}
+            {["projects", "communities"].includes(module) && (
+              <p className="sw-muted mt-2">
+                {r.joined
+                  ? `Joined · ${r.my_role?.replaceAll("_", " ") || "member"}`
+                  : r.invitation_status === "pending"
+                    ? "Invitation pending"
+                    : r.join_request_status === "pending"
+                      ? "Join request pending"
+                      : "Discover"}{" "}
+                · {r.visibility}{" "}
+                {r.owner_type ? `· ${r.owner_type} project` : ""}
+              </p>
+            )}
             {r.member_count !== undefined && (
               <p className="sw-muted mt-2">
                 {r.member_count}{" "}

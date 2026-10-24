@@ -95,7 +95,7 @@ export function CreateSpace({
                   options: [
                     "",
                     ...(data?.communities
-                      .filter((c) => c.joined)
+                      .filter((c) => c.my_role === "captain")
                       .map((c) => c.id) || []),
                   ],
                   optionLabels: Object.fromEntries(

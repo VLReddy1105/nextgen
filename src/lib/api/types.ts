@@ -81,6 +81,14 @@ export interface Post {
   parent_id?: string;
 }
 export interface Item {
+  created_by?: string;
+  organizer_id?: string;
+  student_id?: string;
+  opportunity_id?: string;
+  connection_status?: string;
+  join_request_status?: string;
+  invitation_status?: string;
+  can_manage?: boolean;
   show_on_profile?: boolean;
   slug?: string;
   short_description?: string;
@@ -199,6 +207,14 @@ export type Module =
   | "events"
   | "mentorship";
 export interface Workspace {
+  invitations?: {
+    id: string;
+    kind: string;
+    entity_id: string;
+    status: string;
+    expires_at: string;
+    requested_role: string;
+  }[];
   organizations?: {
     id: string;
     name: string;

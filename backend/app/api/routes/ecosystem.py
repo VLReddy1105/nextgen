@@ -38,6 +38,11 @@ async def campus(current: Current):
         o for o in orgs if o["created_by"] == current.id and o["type"] == "university"
     ]
     domains = await current.repo.rows("university_domains")
+    requests = await current.repo.rpc("eco_campus_requests", {})
+    # RLS scopes both reads; enrich the existing narrow name projection with
+    # the campus identity so a Student cannot submit the same pending request.
+    scoped_requests = {r["id"]: r for r in await current.repo.rows("university_connection_requests")}
+    requests = [{**r, "university_id": scoped_requests.get(r["id"], {}).get("university_id")} for r in requests]
     return {
         "organizations": orgs,
         "domains": domains,
@@ -46,7 +51,7 @@ async def campus(current: Current):
             for d in domains
             if d["approved_at"] and d["domain"] == current.email.lower().split("@")[-1]
         ],
-        "requests": await current.repo.rpc("eco_campus_requests", {}),
+        "requests": requests,
         "invitations": (
             await current.repo.rpc("eco_campus_invitations", {})
             if current.role == "student"

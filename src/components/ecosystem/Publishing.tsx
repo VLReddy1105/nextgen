@@ -50,6 +50,7 @@ export function Publishing({
               "hiring_drive",
               "career_session",
               "networking",
+              "startup_event",
               "placement_session",
             ],
           },
@@ -193,6 +194,27 @@ export function Publishing({
               .map(Number),
             skills: v.eligible_skills || [],
           };
+          if (
+            [...eligibility.years, ...eligibility.graduation_years].some(
+              (n) => !Number.isInteger(n),
+            )
+          )
+            throw new Error(
+              "Enter whole numbers for study and graduation years.",
+            );
+          if (
+            isEvent &&
+            (new Date(String(v.ends_at)) <= new Date(String(v.starts_at)) ||
+              new Date(String(v.deadline)) > new Date(String(v.starts_at)))
+          )
+            throw new Error(
+              "End must follow start, and the registration deadline must not follow start.",
+            );
+          if (
+            v.status === "published" &&
+            new Date(String(v.deadline)) <= new Date()
+          )
+            throw new Error("Publishing requires a future deadline.");
           const base = {
             title: v.title,
             description: v.description,
@@ -201,8 +223,11 @@ export function Publishing({
             status: v.status,
             location: v.location || "",
             eligibility,
-            university_id:
-              !communityId && org?.type === "university" ? org.id : null,
+            university_id: item
+              ? item.university_id || null
+              : !communityId && org?.type === "university"
+                ? org.id
+                : null,
           };
           const body = isEvent
             ? {
@@ -216,7 +241,7 @@ export function Publishing({
               }
             : {
                 ...base,
-                organization_id: org?.id,
+                organization_id: item?.organization_id || org?.id,
                 type: v.type,
                 nice_to_have: v.nice_to_have || [],
                 work_mode: v.work_mode,

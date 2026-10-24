@@ -34,6 +34,7 @@ async def aggregate_workspace(current):
         apps,
         notifications,
         sessions,
+        invitations,
     ) = await gather(
         catalog(current, "opportunities", profile),
         catalog(current, "projects", profile),
@@ -47,6 +48,7 @@ async def aggregate_workspace(current):
             order="created_at.desc",
         ),
         current.repo.rows("mentor_sessions", student_id=f"eq.{current.id}"),
+        current.repo.rows("workspace_invitations", recipient_user_id=f"eq.{current.id}"),
     )
     active = [
         a for a in apps if a["status"] not in ("rejected", "withdrawn", "selected")
@@ -64,6 +66,7 @@ async def aggregate_workspace(current):
         "applications": apps,
         "notifications": notifications,
         "sessions": sessions,
+        "invitations": invitations,
         "counts": {
             "opportunities": sum(
                 not o["applied"] and o["match"]["score"] > 0 for o in opportunities
@@ -112,6 +115,7 @@ async def role_workspace(current):
         notices,
         sessions,
         activity,
+        invitations,
     ) = await gather(
         current.repo.rows("organizations", created_by=f"eq.{current.id}"),
         current.repo.rows(
@@ -129,6 +133,7 @@ async def role_workspace(current):
         ),
         current.repo.rows("mentor_sessions", mentor_id=f"eq.{current.id}"),
         current.repo.rows("ecosystem_activity", order="created_at.desc", limit="30"),
+        current.repo.rows("workspace_invitations", recipient_user_id=f"eq.{current.id}"),
     )
     for e in events:
         e["member_count"] = sum(r["event_id"] == e["id"] for r in registrations)
@@ -141,6 +146,7 @@ async def role_workspace(current):
     if current.role == "mentor":
         connections = await current.repo.rpc("eco_connections", {})
         extra["connections"] = sum(c["status"] == "accepted" for c in connections)
+        extra["requests"] = sum(c["status"] == "requested" for c in connections)
         extra["sessions"] = len(sessions)
     return {
         "profile": profile,
@@ -154,6 +160,7 @@ async def role_workspace(current):
         "sessions": sessions,
         "mentors": [],
         "activity": activity,
+        "invitations": invitations,
         "counts": {
             **extra,
             "opportunities": sum(o["status"] == "published" for o in opps),

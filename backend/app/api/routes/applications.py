@@ -19,6 +19,9 @@ async def detail(id: UUID, current: Current):
     record = await one(current.repo, "applications", id)
     posting = await one(current.repo, "opportunities", record["opportunity_id"])
     record["title"] = posting["title"]
+    record["can_manage"] = posting["created_by"] == current.id
+    organization = await one(current.repo, "organizations", posting["organization_id"])
+    record["organization"] = organization["name"]
     record["applicant"] = await current.repo.rpc(
         "eco_applicant_summary", {"p_id": str(id)}
     )

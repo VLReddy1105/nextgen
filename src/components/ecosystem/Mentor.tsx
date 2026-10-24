@@ -14,35 +14,55 @@ type Connection = {
 export function Mentor({
   mode,
 }: {
-  mode: "profile" | "connections" | "sessions";
+  mode: "profile" | "connections" | "sessions" | "requests" | "students";
 }) {
   const { data } = useWorkspace();
   const [profile, setProfile] = useState<Values | null>(null),
     [connections, setConnections] = useState<Connection[]>([]),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [loading, setLoading] = useState(true),
+    [attempt, retry] = useState(0);
   useEffect(() => {
-    if (mode === "profile")
-      api<Values>("/mentor/profile")
-        .then(setProfile)
-        .catch((e) => setError(e.message));
-    else
-      api<{ items: Connection[] }>("/connections")
-        .then((r) => setConnections(r.items))
-        .catch((e) => setError(e.message));
-  }, [mode, data]);
+    let active = true;
+    setLoading(true);
+    setError("");
+    const request =
+      mode === "profile"
+        ? api<Values>("/mentor/profile").then((r) => {
+            if (active) setProfile(r);
+          })
+        : api<{ items: Connection[] }>("/connections").then((r) => {
+            if (active) setConnections(r.items);
+          });
+    void request
+      .catch((e) => {
+        if (active) setError(e.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [mode, data, attempt]);
   if (error)
     return (
       <div className="sw-card" role="alert">
         {error}
-        <button
-          className="sw-button mt-4"
-          onClick={() => window.location.reload()}
-        >
+        <button className="sw-button mt-4" onClick={() => retry((n) => n + 1)}>
           Retry
         </button>
       </div>
     );
   if (!data) return null;
+  if (loading) return <p aria-busy="true">Loading mentorship…</p>;
+  const visible = connections.filter((c) =>
+    mode === "requests"
+      ? c.status === "requested"
+      : mode === "students"
+        ? c.status === "accepted"
+        : true,
+  );
   if (mode === "profile")
     return profile ? (
       <>
@@ -112,16 +132,22 @@ export function Mentor({
   return (
     <>
       <h1 className="sw-title">
-        {mode === "sessions" ? "Sessions" : "Connections"}
+        {mode === "sessions"
+          ? "Sessions"
+          : mode === "requests"
+            ? "Mentorship requests"
+            : mode === "students"
+              ? "My students"
+              : "Mentorship"}
       </h1>
       <p className="sw-muted mt-3">
         {mode === "sessions"
           ? "Schedule a confirmed session with an accepted student connection."
           : "Accept requests from students you can support."}
       </p>
-      {mode === "connections" ? (
+      {mode !== "sessions" ? (
         <div className="mt-5 grid gap-4">
-          {connections.map((c) => (
+          {visible.map((c) => (
             <section className="sw-card" key={c.student_id}>
               <div className="flex justify-between gap-3">
                 <h2 className="sw-section">{c.full_name}</h2>
@@ -147,10 +173,11 @@ export function Mentor({
               )}
             </section>
           ))}
-          {!connections.length && (
+          {!visible.length && (
             <p className="sw-card">
-              No requests yet. Complete your profile and set your availability
-              so students can find you.
+              {mode === "students"
+                ? "No connected students yet. Accept an eligible mentorship request to establish a connection."
+                : "No mentorship requests in this view. Complete your profile and availability so students can find you."}
             </p>
           )}
         </div>
@@ -186,12 +213,19 @@ export function Mentor({
                 starts_at: "",
                 meeting_url: "",
               }}
-              save={(v) =>
-                api("/sessions", "POST", {
+              save={(v) => {
+                if (new Date(String(v.starts_at)) <= new Date())
+                  throw new Error("Choose a future session time.");
+                if (
+                  v.meeting_url &&
+                  !String(v.meeting_url).startsWith("https://")
+                )
+                  throw new Error("Use an HTTPS meeting URL.");
+                return api("/sessions", "POST", {
                   ...v,
                   starts_at: new Date(String(v.starts_at)).toISOString(),
-                })
-              }
+                });
+              }}
             />
           ) : (
             <p className="sw-card mt-5">

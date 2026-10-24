@@ -23,6 +23,7 @@ type CampusData = {
     id: string;
     status: string;
     student_id: string;
+    university_id?: string;
     full_name?: string;
   }[];
   invitations: {
@@ -49,7 +50,7 @@ type CampusData = {
 export function Campus({
   mode = "students",
 }: {
-  mode?: "students" | "student" | "announcements";
+  mode?: "students" | "student" | "announcements" | "connections";
 }) {
   const { data } = useWorkspace();
   const [campus, setCampus] = useState<CampusData | null>(null),
@@ -84,52 +85,72 @@ export function Campus({
     return (
       <>
         <StudentUniversity />
-        {campus.matching_domains.filter(d=>!data.profile.memberships.some(m=>m.university_id===d.university_id)).map((d) => (
-          <section className="sw-card mt-5" key={d.id}>
-            <h2 className="sw-section">Your university is on GenZnect.</h2>
-            <p className="sw-muted my-3">
-              {campus.organizations.find((o) => o.id === d.university_id)?.name}
-              . Your verified email matches its approved domain. Confirm to{" "}
-              {d.auto_enrollment ? "connect" : "request approval"}.
-            </p>
-            <Action
-              run={() => api(`/campus/${d.university_id}/connect`, "POST")}
-            >
-              {d.auto_enrollment
-                ? "Confirm university connection"
-                : "Request university connection"}
-            </Action>
-          </section>
-        ))}
+        {campus.matching_domains
+          .filter(
+            (d) =>
+              !data.profile.memberships.some(
+                (m) => m.university_id === d.university_id,
+              ) &&
+              !campus.requests.some(
+                (r) =>
+                  r.university_id === d.university_id && r.status === "pending",
+              ),
+          )
+          .map((d) => (
+            <section className="sw-card mt-5" key={d.id}>
+              <h2 className="sw-section">Your university is on GenZnect.</h2>
+              <p className="sw-muted my-3">
+                {
+                  campus.organizations.find((o) => o.id === d.university_id)
+                    ?.name
+                }
+                . Your verified email matches its approved domain. Confirm to{" "}
+                {d.auto_enrollment ? "connect" : "request approval"}.
+              </p>
+              <Action
+                run={() => api(`/campus/${d.university_id}/connect`, "POST")}
+              >
+                {d.auto_enrollment
+                  ? "Confirm university connection"
+                  : "Request university connection"}
+              </Action>
+            </section>
+          ))}
         {campus.requests.map((r) => (
           <p key={r.id} className="sw-card mt-4">
             Campus connection: {r.status}
           </p>
         ))}
-        {campus.invitations.map((i) => (
-          <section className="sw-card mt-4" key={i.id}>
-            <h2 className="sw-section">Invitation from {i.name}</h2>
-            <p className="sw-muted my-3">
-              {i.program} · expires{" "}
-              {new Date(i.expires_at).toLocaleDateString()}
-            </p>
-            <div className="flex gap-3">
-              {[true, false].map((accept) => (
-                <Action
-                  key={String(accept)}
-                  secondary={!accept}
-                  run={() =>
-                    api(`/campus/invitations/${i.id}/decision`, "POST", {
-                      accept,
-                    })
-                  }
-                >
-                  {accept ? "Accept connection" : "Decline"}
-                </Action>
-              ))}
-            </div>
-          </section>
-        ))}
+        {campus.invitations
+          .filter(
+            (i) =>
+              (!i.status || i.status === "pending") &&
+              new Date(i.expires_at) > new Date(),
+          )
+          .map((i) => (
+            <section className="sw-card mt-4" key={i.id}>
+              <h2 className="sw-section">Invitation from {i.name}</h2>
+              <p className="sw-muted my-3">
+                {i.program} · expires{" "}
+                {new Date(i.expires_at).toLocaleDateString()}
+              </p>
+              <div className="flex gap-3">
+                {[true, false].map((accept) => (
+                  <Action
+                    key={String(accept)}
+                    secondary={!accept}
+                    run={() =>
+                      api(`/campus/invitations/${i.id}/decision`, "POST", {
+                        accept,
+                      })
+                    }
+                  >
+                    {accept ? "Accept connection" : "Decline"}
+                  </Action>
+                ))}
+              </div>
+            </section>
+          ))}
         <Announcements rows={campus.announcements} />
         <div className="mt-5 grid gap-3">
           {[
@@ -152,7 +173,9 @@ export function Campus({
       <h1 className="sw-title">
         {mode === "announcements"
           ? "Announcements & resources"
-          : "Students & campus connections"}
+          : mode === "connections"
+            ? "Student connections"
+            : "Students & campus connections"}
       </h1>
       {!org?.verified ? (
         <p className="sw-card mt-5">
@@ -161,7 +184,7 @@ export function Campus({
         </p>
       ) : (
         <>
-          {mode === "students" ? (
+          {mode === "students" || mode === "connections" ? (
             <>
               <details className="sw-card mt-5">
                 <summary className="font-semibold">
@@ -269,50 +292,68 @@ export function Campus({
                   </p>
                 )}
               </section>
-              <div className="sw-card mt-5">
-                <h2 className="sw-section">
-                  {campus.progress.length} enrolled students
-                </h2>
-                <p className="sw-muted mt-3">
-                  Profile completion reflects the shared Student profile checklist.
-                  Activity counts include your campus only.
-                </p>
-                <input
-                  className="sw-input my-4"
-                  placeholder="Search students or program"
-                  aria-label="Search students"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {campus.progress
-                    .filter((s) =>
-                      `${s.full_name} ${s.program}`
-                        .toLowerCase()
-                        .includes(q.toLowerCase()),
-                    )
-                    .slice(0, 100)
-                    .map((s) => (
-                      <article
-                        className="rounded-xl border border-slate-200 p-4"
-                        key={s.student_id}
-                      >
-                        <h3 className="font-semibold">{s.full_name}</h3>
-                        <p className="sw-muted mt-2">
-                          {s.program} ·{" "}
-                          {s.study_status || `Year ${s.year || "not provided"}`}
-                        </p>
-                        <p className="text-sm mt-3">
-                          Profile completion: {s.completion}%
-                        </p>
-                        <p className="sw-muted mt-2">
-                          {s.projects} campus projects · {s.events} events ·{" "}
-                          {s.applications} campus applications
-                        </p>
-                      </article>
-                    ))}
+              {mode === "students" && (
+                <div className="sw-card mt-5">
+                  <h2 className="sw-section">
+                    {campus.progress.length} enrolled students
+                  </h2>
+                  <p className="sw-muted mt-3">
+                    Profile completion reflects the shared Student profile
+                    checklist. Activity counts include your campus only.
+                  </p>
+                  <input
+                    className="sw-input my-4"
+                    placeholder="Search students or program"
+                    aria-label="Search students"
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                  />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {campus.progress
+                      .filter((s) =>
+                        `${s.full_name} ${s.program}`
+                          .toLowerCase()
+                          .includes(q.toLowerCase()),
+                      )
+                      .slice(0, 100)
+                      .map((s) => (
+                        <article
+                          className="rounded-xl border border-slate-200 p-4"
+                          key={s.student_id}
+                        >
+                          <h3 className="font-semibold">{s.full_name}</h3>
+                          <p className="sw-muted mt-2">
+                            {s.program} ·{" "}
+                            {s.study_status ||
+                              `Year ${s.year || "not provided"}`}
+                          </p>
+                          <p className="text-sm mt-3">
+                            Profile completion: {s.completion}%
+                          </p>
+                          <p className="sw-muted mt-2">
+                            {s.projects} campus projects · {s.events} events ·{" "}
+                            {s.applications} campus applications
+                          </p>
+                        </article>
+                      ))}
+                  </div>
                 </div>
-              </div>
+              )}
+              <section className="sw-card mt-5">
+                <h2 className="sw-section">Connection history</h2>
+                {campus.requests
+                  .filter((r) => r.status !== "pending")
+                  .map((r) => (
+                    <p key={r.id} className="sw-muted mt-3">
+                      {r.full_name || "Student"} · {r.status}
+                    </p>
+                  ))}
+                {!campus.requests.some((r) => r.status !== "pending") && (
+                  <p className="sw-muted mt-3">
+                    Decisions on connection requests will appear here.
+                  </p>
+                )}
+              </section>
             </>
           ) : (
             <>

@@ -1,6 +1,11 @@
 // Component fixtures only. This harness bypasses neither application guards nor
 // Supabase identity verification; it does not render the application provider.
-import React from "react";
+import React, { useState } from "react";
+
+import {
+  Talent,
+  SpaceConnections,
+} from "../../src/components/ecosystem/Connections";
 import { RoleWorkspace } from "../../src/components/ecosystem/RoleWorkspace";
 import { Campus } from "../../src/components/ecosystem/Campus";
 import { Mentor } from "../../src/components/ecosystem/Mentor";
@@ -17,6 +22,7 @@ import { StudentProfileEditor } from "../../src/components/student/StudentProfil
 import {
   StudentAITools,
   StudentNotifications,
+  StudentSettings,
 } from "../../src/components/student/StudentExtras";
 import type { Workspace, Module } from "../../src/lib/api/types";
 const search = new URLSearchParams(location.search),
@@ -114,11 +120,30 @@ if (role !== "student")
     },
   ];
 const component =
-  role === "university" && ["students", "announcements"].includes(page) ? (
-    <Campus mode={page as "students" | "announcements"} />
+  page === "settings" ? (
+    <StudentSettings />
+  ) : page === "talent" ? (
+    <Talent />
+  ) : role === "founder" && page === "connections" ? (
+    <SpaceConnections />
+  ) : role === "university" &&
+    ["students", "announcements", "student-connections"].includes(page) ? (
+    <Campus
+      mode={
+        page === "student-connections"
+          ? "connections"
+          : (page as "students" | "announcements")
+      }
+    />
   ) : role === "mentor" &&
-    ["profile", "connections", "sessions"].includes(page) ? (
-    <Mentor mode={page as "profile" | "connections" | "sessions"} />
+    ["profile", "connections", "sessions", "requests", "students"].includes(
+      page,
+    ) ? (
+    <Mentor
+      mode={
+        page as "profile" | "connections" | "sessions" | "requests" | "students"
+      }
+    />
   ) : page === "project-form" ? (
     <CreateSpace kind="projects" />
   ) : role !== "student" && page !== "notifications" ? (
@@ -134,25 +159,34 @@ const component =
   ) : (
     <StudentListing kind={page as Module} />
   );
-createRoot(document.getElementById("root")!).render(
-  <WorkspaceContext.Provider
-    value={{
-      data: search.get("state") === "error" ? null : data,
-      error:
-        search.get("state") === "error"
-          ? "Service unavailable for this isolated test."
-          : "",
-      loading: search.get("state") === "loading",
-      refresh: async () => {},
-      mutate: async () => {
-        throw new Error(
-          "Writes are disabled in this isolated component harness.",
-        );
-      },
-    }}
-  >
-    <StudentWorkspaceFrame user={{ name: "Test Student", initials: "TS" }}>
-      {component}
-    </StudentWorkspaceFrame>
-  </WorkspaceContext.Provider>,
-);
+function Harness() {
+  const [, update] = useState(0);
+  return (
+    <WorkspaceContext.Provider
+      value={{
+        data: search.get("state") === "error" ? null : { ...data },
+        error:
+          search.get("state") === "error"
+            ? "Service unavailable for this isolated test."
+            : "",
+        loading: search.get("state") === "loading",
+        refresh: async () => {},
+        mutate: async (run) => {
+          if (search.get("scenario") === "roles") {
+            await run();
+            update((n) => n + 1);
+            return;
+          }
+          throw new Error(
+            "Writes are disabled in this isolated component harness.",
+          );
+        },
+      }}
+    >
+      <StudentWorkspaceFrame user={{ name: "Test Student", initials: "TS" }}>
+        {component}
+      </StudentWorkspaceFrame>
+    </WorkspaceContext.Provider>
+  );
+}
+createRoot(document.getElementById("root")!).render(<Harness />);

@@ -187,7 +187,16 @@ class SessionCreate(Strict):
     @field_validator("meeting_url")
     @classmethod
     def url(cls, v):
-        return ProfileUpdate.safe_url(v)
+        value = ProfileUpdate.safe_url(v)
+        if value and not value.startswith("https://"):
+            raise ValueError("Use an HTTPS meeting URL")
+        return value
+
+    @model_validator(mode="after")
+    def future_session(self):
+        if self.starts_at.tzinfo is None or self.starts_at <= datetime.now(timezone.utc):
+            raise ValueError("Choose a future session time with timezone")
+        return self
 
 
 class DomainSave(Strict):

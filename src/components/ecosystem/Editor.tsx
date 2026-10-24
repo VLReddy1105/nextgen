@@ -49,12 +49,35 @@ export function Editor({
             if (
               (f.required ||
                 (f.publishRequired && values.status === "published")) &&
-              (!values[f.key] ||
+              (values[f.key] === null ||
+                values[f.key] === undefined ||
+                (typeof values[f.key] === "string" &&
+                  !String(values[f.key]).trim()) ||
                 (Array.isArray(values[f.key]) &&
                   !(values[f.key] as string[]).length))
             )
               throw Error(`${f.label} is required.`);
-          await mutate(() => save(values));
+          for (const f of fields) {
+            if (
+              f.options &&
+              values[f.key] &&
+              !f.options.includes(String(values[f.key]))
+            )
+              throw Error(`Choose a supported ${f.label.toLowerCase()}.`);
+            if (
+              f.type === "datetime-local" &&
+              values[f.key] &&
+              !Number.isFinite(Date.parse(String(values[f.key])))
+            )
+              throw Error(`Enter a valid ${f.label.toLowerCase()}.`);
+          }
+          const cleaned = Object.fromEntries(
+            Object.entries(values).map(([key, value]) => [
+              key,
+              typeof value === "string" ? value.trim() : value,
+            ]),
+          );
+          await mutate(() => save(cleaned));
           setSaved(true);
           onSaved?.();
         } catch (e) {

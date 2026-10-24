@@ -2,7 +2,9 @@
 import Link from "next/link";
 import { api } from "@/lib/api/client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import { MutationRefresh } from "@/components/ecosystem/MutationRefresh";
+import { Invitations } from "@/components/ecosystem/Invitations";
 import {
   ArrowUpRight,
   Bookmark,
@@ -56,6 +58,7 @@ export function Action({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const { mutate } = useWorkspace();
+  const refreshDetail = useContext(MutationRefresh);
   return (
     <span className="inline-flex max-w-full flex-col items-start gap-2">
       <button
@@ -65,7 +68,10 @@ export function Action({
           setBusy(true);
           setError("");
           try {
-            await mutate(run);
+            if (refreshDetail) {
+              await run();
+              await refreshDetail();
+            } else await mutate(run);
           } catch (e) {
             setError(e instanceof Error ? e.message : "Action failed.");
           } finally {
@@ -213,6 +219,12 @@ export function ItemCard({ item, kind }: { item: Item; kind: Module }) {
             </Link>
             {item.joined ? (
               <span className="sw-chip">Joined ✓</span>
+            ) : item.invitation_status === "pending" ? (
+              <span className="sw-chip">
+                Invitation pending · open to respond
+              </span>
+            ) : item.join_request_status === "pending" ? (
+              <span className="sw-chip">Join request pending</span>
             ) : item.join_policy === "open_join" ? (
               <Action run={() => workspaceApi.join(kind, item.id)}>Join</Action>
             ) : item.join_policy === "request_to_join" ? (
@@ -228,7 +240,31 @@ export function ItemCard({ item, kind }: { item: Item; kind: Module }) {
               <span className="sw-chip">Invitation only</span>
             )}
           </>
-        ) : kind === "events" && item.status==="cancelled" ? <span className="sw-chip">Event cancelled</span> : kind === "events" &&
+        ) : kind === "mentorship" && student ? (
+          <>
+            {item.connection_status ? (
+              <span className="sw-chip">
+                {item.connection_status === "accepted"
+                  ? "Connected"
+                  : `Request ${item.connection_status}`}
+              </span>
+            ) : item.availability_status === "available" ? (
+              <Action run={() => api(`/mentorship/${item.id}/request`, "POST")}>
+                Request mentorship
+              </Action>
+            ) : (
+              <span className="sw-chip">Not accepting requests</span>
+            )}
+            <Link
+              href={`/dashboard/mentorship/${item.id}`}
+              className="sw-button sw-secondary"
+            >
+              View profile
+            </Link>
+          </>
+        ) : kind === "events" && item.status === "cancelled" ? (
+          <span className="sw-chip">Event cancelled</span>
+        ) : kind === "events" &&
           !item.registered &&
           new Date(item.deadline ?? 0) < new Date() ? (
           <span className="sw-chip">Registration closed</span>
@@ -375,6 +411,9 @@ export function StudentListing({ kind }: { kind: Module }) {
       </p>
       <h1 className="sw-title">{copy[kind][0]}</h1>
       <p className="sw-muted mt-3">{copy[kind][1]}</p>
+      {(kind === "projects" || kind === "communities") && (
+        <Invitations kind={kind} />
+      )}
       {kind === "projects" || kind === "communities" ? (
         <CreateSpace kind={kind} />
       ) : null}
@@ -505,12 +544,20 @@ export function StudentListing({ kind }: { kind: Module }) {
           description={
             kind === "applications"
               ? "Discover opportunities matched to your skills and take your next step."
-              : "Your workspace grows with real activity. Update your profile or adjust your search to discover more."
+              : kind === "projects" || kind === "communities"
+                ? "Create a space, discover eligible spaces, or respond to an invitation. Try clearing your filters."
+                : kind === "events"
+                  ? "Eligible published events will appear here. Clear filters to see all available events."
+                  : kind === "mentorship"
+                    ? "Available mentors will appear here. Try a different skill or clear your search."
+                    : "Eligible published opportunities will appear here. Try clearing filters or adding your skills for better matching."
           }
           href={
             kind === "applications"
               ? "/dashboard/opportunities"
-              : "/dashboard/profile"
+              : kind === "opportunities"
+                ? "/dashboard/profile"
+                : undefined
           }
           action={
             kind === "applications"
@@ -523,45 +570,70 @@ export function StudentListing({ kind }: { kind: Module }) {
   );
 }
 function MentorConnections() {
-  const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<Item[]>([]),
-    [error, setError] = useState("");
+  const { data } = useWorkspace();
+  const [items, setItems] = useState<
+    { mentor_id: string; full_name: string; status: string }[]
+  >([]);
+  const [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [attempt, retry] = useState(0);
   useEffect(() => {
-    import("@/lib/api/client")
-      .then(({ api }) =>
-        api<{
-          items: Item[];
-          connections: { mentor_id: string; status: string }[];
-        }>("/mentorship"),
-      )
-      .then((r) =>
-        setItems(
-          r.items.filter((m) =>
-            r.connections.some(
-              (c) => c.mentor_id === m.id && c.status === "accepted",
-            ),
-          ),
-        ),
-      )
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, []);
+    let active = true;
+    setLoading(true);
+    setError("");
+    void api<{ items: typeof items }>("/connections")
+      .then((r) => {
+        if (active) setItems(r.items);
+      })
+      .catch((e) => {
+        if (active) setError(e.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [data, attempt]);
   return (
     <>
       <h1 className="sw-title">My Mentors</h1>
+      <p className="sw-muted mt-3">
+        Track requested, accepted, and declined mentorship relationships.
+      </p>
       {loading ? (
-        <div
-          aria-busy="true"
-          className="mt-5 h-40 animate-pulse rounded-xl bg-slate-100"
-        />
+        <p aria-busy="true">Loading connections…</p>
       ) : error ? (
-        <p role="alert">{error}</p>
+        <div role="alert">
+          {error}
+          <button
+            className="sw-button mt-3"
+            onClick={() => retry((n) => n + 1)}
+          >
+            Retry
+          </button>
+        </div>
       ) : items.length ? (
-        items.map((i) => <ItemCard key={i.id} item={i} kind="mentorship" />)
+        items.map((c) => (
+          <section className="sw-card mt-4" key={c.mentor_id}>
+            <h2 className="sw-section">{c.full_name}</h2>
+            <p className="sw-muted mt-3">
+              {c.status === "accepted" ? "Connected" : `Request ${c.status}`}
+            </p>
+            {c.status === "accepted" && (
+              <Link
+                className="sw-button mt-3"
+                href="/dashboard/mentorship?view=sessions"
+              >
+                View sessions
+              </Link>
+            )}
+          </section>
+        ))
       ) : (
         <Empty
-          title="Your mentoring connections"
-          description="Accepted mentoring relationships will appear here. Start by exploring mentor profiles."
+          title="No mentorship requests yet"
+          description="Discover an available mentor and request guidance. The mentor must accept before a connection is established."
           href="/dashboard/mentorship"
           action="Discover mentors"
         />
@@ -643,6 +715,29 @@ export function StudentOverview() {
               </Link>
             ))}
         </div>
+      </section>
+      <Invitations />
+      <section className="sw-card mt-5">
+        <h2 className="sw-section">Mentorship activity</h2>
+        <p className="sw-muted mt-3">
+          {
+            data.mentors.filter((m) => m.connection_status === "requested")
+              .length
+          }{" "}
+          pending requests ·{" "}
+          {
+            data.sessions.filter(
+              (s) => s.starts_at && new Date(s.starts_at) > new Date(),
+            ).length
+          }{" "}
+          upcoming sessions
+        </p>
+        <Link
+          href="/dashboard/mentorship?view=mine"
+          className="mt-3 inline-block text-sm text-blue-700"
+        >
+          View mentoring relationships →
+        </Link>
       </section>
       <section className="mt-8">
         <div className="mb-4 flex justify-between">
