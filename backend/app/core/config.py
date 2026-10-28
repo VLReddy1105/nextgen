@@ -11,15 +11,31 @@ class Settings:
     frontend_origin: str
 
 
-def load_settings() -> Settings:
-    # Only this repository's existing local configuration; never log values.
-    local = Path(__file__).resolve().parents[3] / ".env.local"
+def read_environment(root: Path, mode: str) -> dict[str, str]:
+    """Plain dotenv values, ordered like Next.js; process env wins in load_settings."""
+    files = [".env", f".env.{mode}"]
+    if mode != "test":
+        files.append(".env.local")
+    files.append(f".env.{mode}.local")
     values = {}
-    if local.exists():
-        for line in local.read_text(encoding="utf-8-sig").splitlines():
-            key, sep, value = line.partition("=")
-            if sep and not key.strip().startswith("#"):
-                values[key.strip()] = value.strip().strip('"').strip("'")
+    for name in files:
+        path = root / name
+        if path.exists():
+            for line in path.read_text(encoding="utf-8-sig").splitlines():
+                key, sep, value = line.partition("=")
+                if sep and not key.strip().startswith("#"):
+                    values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def load_settings() -> Settings:
+    # Direct production servers default to production. The local launcher explicitly
+    # selects development. Never load shared development defaults in production.
+    mode = os.environ.get("NODE_ENV", "production")
+    if mode not in ("development", "test", "production"):
+        raise ValueError("NODE_ENV must be development, test, or production")
+    root = Path(__file__).resolve().parents[3]
+    values = read_environment(root, mode)
 
     def get(key, default=""):
         return os.environ.get(key, values.get(key, default))

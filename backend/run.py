@@ -1,5 +1,6 @@
 """Repository-local launcher supporting a conventional venv or local .deps."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -12,6 +13,7 @@ if __name__ == "__main__":
         import pytest
 
         raise SystemExit(pytest.main([str(root / "tests"), "-q"]))
+    os.environ.setdefault("NODE_ENV", "development")
     import uvicorn
 
     uvicorn.run("app.main:app", host="127.0.0.1", port=8000, access_log=False)

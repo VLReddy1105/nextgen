@@ -5,6 +5,9 @@ import assert from "node:assert/strict";
 const db = new PGlite();
 await db.exec(`
  create role anon; create role authenticated; create role service_role bypassrls;
+ -- Simulate the broad hosted defaults that bare-role tests previously missed.
+ alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+ alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
  create schema auth; create schema storage;
  create table auth.users(id uuid primary key, email text, email_confirmed_at timestamptz, raw_user_meta_data jsonb default '{}');
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
@@ -15,10 +18,22 @@ await db.exec(`
  create function storage.foldername(text) returns text[] language sql as $$ select string_to_array($1,'/') $$;
  grant all on storage.objects to authenticated;
 `);
+let functionPrivilegesBefore;
+const privileges = () => db.query(`select p.oid::regprocedure::text as name,
+ has_function_privilege('anon',p.oid,'EXECUTE') as anon,
+ has_function_privilege('authenticated',p.oid,'EXECUTE') as authenticated,
+ has_function_privilege('service_role',p.oid,'EXECUTE') as service
+ from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+ where n.nspname='public' and p.proname not in ('workspace_notify','eco_activity','eco_space_owner') order by 1`);
 for (const file of (await readdir("supabase/migrations"))
   .filter((f) => f.endsWith(".sql"))
   .sort()) {
   try {
+    if (file === "20261028000000_harden_workspace_privileges.sql") {
+      functionPrivilegesBefore = (await privileges()).rows;
+      assert.equal((await db.query("select has_table_privilege('anon','public.notifications','TRUNCATE') as allowed")).rows[0].allowed, true);
+      assert.equal((await db.query("select has_function_privilege('anon','public.workspace_notify(uuid,text,text,text,uuid,text,text)','EXECUTE') as allowed")).rows[0].allowed, true);
+    }
     await db.exec(await readFile(`supabase/migrations/${file}`, "utf8"));
   } catch (error) {
     console.error(
@@ -36,6 +51,22 @@ for (const file of (await readdir("supabase/migrations"))
 console.log(
   "All historical and workspace migrations applied to isolated PostgreSQL.",
 );
+assert.deepEqual((await privileges()).rows, functionPrivilegesBefore, "All other RPC grants preserved");
+for (const role of ["anon", "authenticated"]) {
+  for (const signature of ["workspace_notify(uuid,text,text,text,uuid,text,text)", "eco_activity(text,uuid,text)", "eco_space_owner(text,uuid)"]) {
+    assert.equal((await db.query("select has_function_privilege($1,$2,'EXECUTE') as allowed", [role, 'public.'+signature])).rows[0].allowed, false);
+    assert.equal((await db.query("select has_function_privilege('service_role',$1,'EXECUTE') as allowed", ['public.'+signature])).rows[0].allowed, true);
+  }
+  assert.equal((await db.query("select count(*)::int as n from pg_tables where schemaname='public' and has_table_privilege($1,quote_ident(schemaname)||'.'||quote_ident(tablename),'TRUNCATE')",[role])).rows[0].n,0);
+  assert.equal((await db.query("select has_table_privilege($1,'public.notifications','UPDATE') as allowed",[role])).rows[0].allowed,false);
+  const cols=(await db.query("select column_name from information_schema.columns where table_schema='public' and table_name='notifications' and has_column_privilege($1,'public.notifications',column_name,'UPDATE') order by column_name",[role])).rows;
+  assert.deepEqual(cols,role==='authenticated' ? [{column_name:'read_at'}] : []);
+}
+// Privilege changes are idempotent; no wider RPC changes on a second local run.
+await db.exec(await readFile('supabase/migrations/20261028000000_harden_workspace_privileges.sql','utf8'));
+assert.deepEqual((await privileges()).rows,functionPrivilegesBefore);
+console.log('PASS: hosted-style default grants corrected; other RPC ACLs and service helper access preserved; migration idempotent.');
+
 const ids = Array.from(
   { length: 5 },
   (_, i) => `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
@@ -335,4 +366,25 @@ await db.exec('reset role');
 await db.query("select set_config('request.jwt.claim.sub','',false)");
 await db.exec(await readFile('tests/profile-access.sql','utf8'));
 console.log('PASS: existing profile-access SQL regression test.');
+// Direct helper calls fail for both API roles, while earlier full flows proved nested calls.
+for (const role of ['anon','authenticated']) {
+ await db.exec('reset role');
+ await db.exec('set role '+role);
+ await rejects("select workspace_notify(null,'x','x','projects',null,'/dashboard/projects','x')");
+ await rejects("select eco_activity('projects',null,'x')");
+ await rejects("select eco_space_owner('projects',null)");
+}
+await as(student);
+const owned = (await db.query('select id from notifications limit 1')).rows[0];
+assert.ok(owned);
+assert.equal((await db.query('update notifications set read_at=now() where id=$1 returning id',[owned.id])).rows.length,1);
+await db.query('update notifications set read_at=now() where recipient_user_id=$1 and read_at is null',[student]);
+await rejects("update notifications set recipient_user_id=$1",[other]);
+await rejects("update notifications set metadata='{}'::jsonb");
+await as(other);
+assert.equal((await db.query('update notifications set read_at=now() where id=$1 returning id',[owned.id])).rows.length,0);
+console.log('PASS: direct helper denial; mark-one/mark-all retained; content/recipient updates denied; other recipients isolated.');
+await db.exec('reset role');
+await db.exec(await readFile('scripts/verify-workspace-privileges.sql','utf8'));
+console.log('PASS: post-deployment verification SQL executes read-only locally.');
 await db.close();
