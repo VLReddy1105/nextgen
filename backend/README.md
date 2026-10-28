@@ -25,7 +25,11 @@ In another terminal:
 npm run dev
 ```
 
-Open `http://localhost:3000`. Do not alternate localhost and 127.0.0.1 during sign-in. Existing `.env.local` is read without modification. Environment variables override local values:
+Open `http://localhost:3000`. Do not alternate localhost and 127.0.0.1 during sign-in. Shared public `.env.development` defaults are loaded by `python backend/run.py`; no `.env.local` is required. The launcher defaults `NODE_ENV` to development without overriding an existing value. Direct ASGI/production startup defaults to production and requires explicit configuration. Set `NODE_ENV=development` if using uvicorn directly for local work.
+
+Precedence (highest first): process environment, `.env.<mode>.local`, `.env.local` (except test), `.env.<mode>`, `.env`. Files use plain `NAME=value` or quoted values; shell interpolation/multiline values are not supported by this backend loader. Never put secrets in the tracked `.env.development`.
+
+Runtime variables:
 
 | Name | Use |
 |---|---|
@@ -38,16 +42,9 @@ Set an HTTPS API URL and matching frontend origin for a future deployment; a rem
 
 ## Database installation
 
-Six additive migrations `20261002000000` through `20261002000005` must be applied in order, after the existing migration history. They are **not applied to the connected hosted database**. Read-only inspection returned `PGRST205` for opportunities, notifications and project_tasks. Do not reset the database or rerun historical SQL manually.
+The maintainer confirmed all 24 local migration versions match hosted project `orhoolcpcbihfrbkpioz`. No migration deployment is required. Normal developers do not install/link Supabase, use Pooler credentials, or run migration commands. Runtime uses a public key and each authenticated user's token under existing RLS.
 
-For a Supabase CLI project already linked to the intended database, inspect first:
-
-```powershell
-npx supabase migration list
-npx supabase db push --dry-run
-```
-
-After reviewing the target and pending migrations, the maintainer can apply them with `npx supabase db push`. Keep database credentials out of commands, screenshots and commits. This implementation did not run that command. The isolated SQL test applies all historical and new migrations to an in-memory PostgreSQL engine with simulated Supabase auth/storage schemas; it does not replace a hosted migration test.
+Read [the shared setup report](../docs/supabase-final-setup.md) for verified evidence and outstanding hosted metadata checks. `scripts/verify-supabase-readonly.sql` is maintainer-only metadata inspection, not a startup step. Do not reset, repair, or deploy migrations as part of developer onboarding.
 
 ## Structure and contracts
 
