@@ -167,6 +167,11 @@ class MentorProfile(Strict):
     topics: list[str] = Field(default_factory=list, max_length=20)
     availability_status: Literal["available", "limited", "unavailable"] = "available"
 
+    @field_validator("full_name", "headline", "bio", "current_position", "company", "industry", mode="before")
+    @classmethod
+    def trim_text(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
     @field_validator("linkedin_url", "portfolio_url")
     @classmethod
     def urls(cls, v):

@@ -42,6 +42,8 @@ def test_mentor_catalog_keeps_request_state_to_prevent_duplicate_actions():
             assert filters["student_id"] == "eq.student"
             return [{"mentor_id": "mentor", "status": "requested"}]
         async def rpc(self, name, params):
+            if name == "eco_mentor_badges":
+                return []
             return [{"user_id": "mentor", "full_name": "Mentor"}]
     rows = asyncio.run(catalog(SimpleNamespace(id="student", repo=Repo()), "mentorship", {"skills": ["python"], "interests": []}))
     assert rows[0]["connection_status"] == "requested"

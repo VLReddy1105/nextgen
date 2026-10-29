@@ -133,6 +133,7 @@ async def mentor_profile(current: Current):
 
 @router.put("/mentor/profile")
 async def save_mentor(body: MentorProfile, current: Current):
+    require(current.role == "mentor")
     await current.repo.rpc("eco_mentor_profile", {"p_data": body.model_dump()})
     return {"ok": True}
 

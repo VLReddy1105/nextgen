@@ -124,6 +124,13 @@ export function ItemCard({ item, kind }: { item: Item; kind: Module }) {
           {item.description || item.bio}
         </p>
       ) : null}
+      {item.affiliation_context && (
+        <p className="sw-chip mt-2">
+          {item.affiliation_context === "independent"
+            ? "Independent Mentor"
+            : `${item.affiliation_context === "company" ? "Company" : "University"} Mentor — ${item.affiliation_organization}`}
+        </p>
+      )}
       <div className="mt-4 flex flex-wrap gap-1.5">
         {(item.tags || item.expertise || []).slice(0, 5).map((t) => (
           <span key={t} className="sw-chip">

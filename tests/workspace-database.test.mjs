@@ -35,6 +35,7 @@ for (const file of (await readdir("supabase/migrations"))
       assert.equal((await db.query("select has_function_privilege('anon','public.workspace_notify(uuid,text,text,text,uuid,text,text)','EXECUTE') as allowed")).rows[0].allowed, true);
     }
     await db.exec(await readFile(`supabase/migrations/${file}`, "utf8"));
+    if (file === "20261028000000_harden_workspace_privileges.sql") assert.deepEqual((await privileges()).rows, functionPrivilegesBefore, "Hardening preserves all other RPC grants");
   } catch (error) {
     console.error(
       "Migration failed:",
@@ -51,7 +52,7 @@ for (const file of (await readdir("supabase/migrations"))
 console.log(
   "All historical and workspace migrations applied to isolated PostgreSQL.",
 );
-assert.deepEqual((await privileges()).rows, functionPrivilegesBefore, "All other RPC grants preserved");
+const privilegesAfterAllMigrations = (await privileges()).rows;
 for (const role of ["anon", "authenticated"]) {
   for (const signature of ["workspace_notify(uuid,text,text,text,uuid,text,text)", "eco_activity(text,uuid,text)", "eco_space_owner(text,uuid)"]) {
     assert.equal((await db.query("select has_function_privilege($1,$2,'EXECUTE') as allowed", [role, 'public.'+signature])).rows[0].allowed, false);
@@ -64,7 +65,7 @@ for (const role of ["anon", "authenticated"]) {
 }
 // Privilege changes are idempotent; no wider RPC changes on a second local run.
 await db.exec(await readFile('supabase/migrations/20261028000000_harden_workspace_privileges.sql','utf8'));
-assert.deepEqual((await privileges()).rows,functionPrivilegesBefore);
+assert.deepEqual((await privileges()).rows,privilegesAfterAllMigrations);
 console.log('PASS: hosted-style default grants corrected; other RPC ACLs and service helper access preserved; migration idempotent.');
 
 const ids = Array.from(

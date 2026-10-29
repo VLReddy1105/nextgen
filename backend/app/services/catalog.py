@@ -3,6 +3,7 @@ from app.services.concurrency import gather
 from app.core.errors import APIError
 from app.matching.rank import rank, eligible
 from app.services.students import student_core
+from app.services.mentor_affiliations import badges
 
 
 async def one(repo, table, id):
@@ -37,6 +38,10 @@ async def catalog(current, kind, profile=None):
             for r in records
             if r["user_id"] in names
         ]
+        affiliation_badges = await badges(current, [r["id"] for r in records])
+        if affiliation_badges is not None:
+            by_id = {b["mentor_user_id"]: b for b in affiliation_badges}
+            records = [{**r, "affiliation_context": by_id.get(r["id"], {}).get("context", "independent"), "affiliation_organization": by_id.get(r["id"], {}).get("organization_name")} for r in records]
     elif kind == "opportunities":
         records, organizations, saved_rows, applied_rows = await gather(
             repo.rows(kind, order="created_at.desc"),
@@ -168,4 +173,5 @@ async def applications(current):
             ),
         }
         for r in records
+        if opportunities.get(r["opportunity_id"], {}).get("audience", "student") == "student"
     ]

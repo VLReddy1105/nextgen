@@ -1,3 +1,4 @@
+import type { MentorHubData } from "./mentor-types";
 export interface Completion {
   percent: number;
   checklist: { id: string; label: string; done: boolean; href: string }[];
@@ -81,6 +82,9 @@ export interface Post {
   parent_id?: string;
 }
 export interface Item {
+  audience?: "student" | "mentor";
+  affiliation_context?: "independent" | "company" | "university";
+  affiliation_organization?: string;
   created_by?: string;
   organizer_id?: string;
   student_id?: string;
@@ -206,7 +210,23 @@ export type Module =
   | "communities"
   | "events"
   | "mentorship";
+export interface MentorConnection {
+  student_id: string;
+  mentor_id: string;
+  full_name: string;
+  status: string;
+  skills: string[] | null;
+  matched_skills?: string[];
+}
 export interface Workspace {
+  mentor_hub?: MentorHubData;
+  mentor?: {
+    profile: Record<string, string | number | boolean | string[] | null>;
+    connections: MentorConnection[];
+    recommended_students: MentorConnection[];
+    project_matches?: Record<string, MentorConnection[]>;
+    profile_missing: string[];
+  };
   invitations?: {
     id: string;
     kind: string;
