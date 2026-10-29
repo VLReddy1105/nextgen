@@ -7,6 +7,7 @@ import { useWorkspace } from "@/components/student/WorkspaceProvider";
 import { CreateSpace } from "@/components/student/CreateSpace";
 import { Publishing } from "./Publishing";
 import { roleModules, moduleLabel } from "@/lib/role-workspaces";
+import { MentorOverview } from "./MentorOverview";
 import { Invitations } from "./Invitations";
 export function RoleWorkspace({ module = "overview" }: { module?: string }) {
   const { data } = useWorkspace(),
@@ -29,6 +30,7 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
             : module === "events"
               ? data.events
               : data.opportunities;
+  if (module === "overview" && role === "mentor") return <MentorOverview />;
   if (module === "overview")
     return (
       <>

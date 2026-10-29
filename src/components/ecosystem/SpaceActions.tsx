@@ -96,6 +96,29 @@ export function SpaceActions({
             <summary className="font-semibold">
               Invitations and requests
             </summary>
+            {kind === "projects" && data?.profile.primary_role === "mentor" && (
+              <section className="mt-4">
+                <h2 className="sw-section">Mentees matching this project</h2>
+                {(data.mentor?.project_matches?.[item.id] || [])
+                  .filter(
+                    (student) =>
+                      !item.team?.some(
+                        (member) => member.user_id === student.student_id,
+                      ),
+                  )
+                  .map((student) => (
+                    <p className="sw-muted mt-3" key={student.student_id}>
+                      {student.full_name} · Matches{" "}
+                      {student.matched_skills?.join(" + ")}
+                    </p>
+                  ))}
+                <p className="sw-muted mt-3">
+                  Matches use your accepted mentees’ skills. Invite by account
+                  email below; the student must accept and meet the project’s
+                  access rules. Matching does not grant membership.
+                </p>
+              </section>
+            )}
             <Editor
               title="Invitation"
               fields={[

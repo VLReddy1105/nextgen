@@ -113,3 +113,6 @@ for module in (
     workspace,
 ):
     app.include_router(module.router)
+
+from app.api.routes import mentor_affiliations
+app.include_router(mentor_affiliations.router)

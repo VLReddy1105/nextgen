@@ -1,3 +1,4 @@
+export const affiliationFixture = { status: "pending", application: "applied" };
 // Vite component fixtures only; never imported by Next.js or the application API.
 export const roleFixture = {
   mentorStatus: "requested",
@@ -11,6 +12,24 @@ export async function api<T>(
   const scenario = new URLSearchParams(location.search).get("scenario");
   if (scenario === "failure" && ["/connections", "/campus"].includes(path))
     throw Error("Controlled connection read failed");
+  if (method !== "GET" && scenario === "affiliations") {
+    if (path.includes("/affiliations/") && path.endsWith("/decision")) {
+      const action = (body as { action: string }).action;
+      affiliationFixture.status = (
+        {
+          accept: "accepted",
+          reject: "rejected",
+          cancel: "cancelled",
+          end: "ended",
+        } as Record<string, string>
+      )[action];
+    } else if (path.endsWith("/status"))
+      affiliationFixture.application = (body as { status: string }).status;
+    else if (path.endsWith("/affiliations"))
+      affiliationFixture.status = "pending";
+    else throw Error("Unsupported affiliation fixture mutation");
+    return { ok: true } as T;
+  }
   if (method !== "GET" && scenario === "roles") {
     if (path === "/connections/test-student/decision")
       roleFixture.mentorStatus = (body as { accept: boolean }).accept

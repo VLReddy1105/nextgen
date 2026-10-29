@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter
 from app.api.dependencies import Current
 from app.services.students import student_core
+from app.services.mentors import mentor_workspace
+from app.services.mentor_affiliations import optional_hub
 from app.services.catalog import catalog, applications
 from app.repositories.workspace_reads import WorkspaceReads
 from app.services.concurrency import gather
@@ -116,6 +118,7 @@ async def role_workspace(current):
         sessions,
         activity,
         invitations,
+        mentor_hub,
     ) = await gather(
         current.repo.rows("organizations", created_by=f"eq.{current.id}"),
         current.repo.rows(
@@ -134,7 +137,9 @@ async def role_workspace(current):
         current.repo.rows("mentor_sessions", mentor_id=f"eq.{current.id}"),
         current.repo.rows("ecosystem_activity", order="created_at.desc", limit="30"),
         current.repo.rows("workspace_invitations", recipient_user_id=f"eq.{current.id}"),
+        optional_hub(current),
     )
+    opps = [o for o in opps if o.get("audience", "student") == "student"]
     for e in events:
         e["member_count"] = sum(r["event_id"] == e["id"] for r in registrations)
     extra = {}
@@ -143,13 +148,17 @@ async def role_workspace(current):
             "eco_campus_progress", {"p_university": orgs[0]["id"]}
         )
         extra["students"] = len(progress)
+    mentor = None
     if current.role == "mentor":
-        connections = await current.repo.rpc("eco_connections", {})
+        mentor = await mentor_workspace(current, projects)
+        connections = mentor["connections"]
         extra["connections"] = sum(c["status"] == "accepted" for c in connections)
         extra["requests"] = sum(c["status"] == "requested" for c in connections)
         extra["sessions"] = len(sessions)
     return {
         "profile": profile,
+        **({"mentor_hub": mentor_hub} if mentor_hub is not None else {}),
+        **({"mentor": mentor} if mentor is not None else {}),
         "organizations": orgs,
         "opportunities": opps,
         "projects": projects,

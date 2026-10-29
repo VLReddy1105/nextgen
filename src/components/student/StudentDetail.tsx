@@ -409,6 +409,13 @@ export function StudentDetail({ kind, id }: { kind: Module; id: string }) {
         <section className="sw-card mt-5">
           <h2 className="sw-section">Expertise & background</h2>
           <p className="sw-muted mt-4">
+            {item.affiliation_context && (
+              <span className="sw-chip mb-2 block">
+                {item.affiliation_context === "independent"
+                  ? "Independent Mentor"
+                  : `${item.affiliation_context === "company" ? "Company" : "University"} Mentor — ${item.affiliation_organization}`}
+              </span>
+            )}
             {item.current_position}
             {item.company ? ` · ${item.company}` : ""}
           </p>

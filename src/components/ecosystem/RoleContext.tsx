@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { MentorContextBadge } from "./MentorAffiliations";
 import { useWorkspace } from "@/components/student/WorkspaceProvider";
 export function RoleContext() {
   const { data } = useWorkspace();
@@ -24,6 +25,7 @@ export function RoleContext() {
     .slice(0, 3);
   return (
     <aside aria-label="Workspace context" className="sw-context">
+      {role === "mentor" && <MentorContextBadge />}
       <section className="sw-card">
         <h2 className="sw-section">
           {role === "company"
@@ -97,6 +99,34 @@ export function RoleContext() {
           </p>
         )}
       </section>
+      {role === "mentor" && data.mentor && (
+        <section className="sw-card">
+          <h2 className="sw-section">Student skill matches</h2>
+          {data.mentor.recommended_students.slice(0, 3).map((s) => (
+            <Link
+              className="sw-muted mt-3 block"
+              key={s.student_id}
+              href={
+                s.status === "requested"
+                  ? "/dashboard/requests"
+                  : "/dashboard/students"
+              }
+            >
+              {s.full_name} · {s.matched_skills?.join(" + ")}
+            </Link>
+          ))}
+          {!data.mentor.recommended_students.length && (
+            <p className="sw-muted mt-3">
+              No matching students in your current connections.
+            </p>
+          )}
+          {data.mentor.profile_missing.length > 0 && (
+            <Link className="sw-button mt-4" href="/dashboard/profile">
+              Complete mentor profile
+            </Link>
+          )}
+        </section>
+      )}
       <section className="sw-card">
         <h2 className="sw-section">Recent updates</h2>
         {data.notifications.slice(0, 4).map((n) => (
