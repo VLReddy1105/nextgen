@@ -19,6 +19,13 @@ await db.exec(`
  grant all on storage.objects to authenticated;
 `);
 let functionPrivilegesBefore;
+let supportSecurityBefore;
+const supportMigration = "20261104000000_support_reports_workspace_roles.sql";
+const securitySnapshot = async () => (await db.query(`select
+ (select jsonb_agg(to_jsonb(p) order by schemaname,tablename,policyname) from pg_policies p where not (schemaname='public' and tablename='support_reports' and policyname='reports_insert')) policies,
+ (select jsonb_agg(jsonb_build_array(oid,relacl,relrowsecurity) order by oid) from pg_class where relnamespace='public'::regnamespace) tables,
+ (select jsonb_agg(jsonb_build_array(oid,proacl,prosrc) order by oid) from pg_proc where pronamespace='public'::regnamespace) functions,
+ (select jsonb_agg(to_jsonb(t) order by oid) from pg_trigger t) triggers`)).rows;
 const privileges = () => db.query(`select p.oid::regprocedure::text as name,
  has_function_privilege('anon',p.oid,'EXECUTE') as anon,
  has_function_privilege('authenticated',p.oid,'EXECUTE') as authenticated,
@@ -29,12 +36,18 @@ for (const file of (await readdir("supabase/migrations"))
   .filter((f) => f.endsWith(".sql"))
   .sort()) {
   try {
+    if (file === supportMigration) {
+      supportSecurityBefore = await securitySnapshot();
+      const policy = (await db.query("select with_check from pg_policies where schemaname='public' and tablename='support_reports' and policyname='reports_insert'")).rows[0];
+      assert.match(policy.with_check, /workspace_ready\('student'/);
+    }
     if (file === "20261028000000_harden_workspace_privileges.sql") {
       functionPrivilegesBefore = (await privileges()).rows;
       assert.equal((await db.query("select has_table_privilege('anon','public.notifications','TRUNCATE') as allowed")).rows[0].allowed, true);
       assert.equal((await db.query("select has_function_privilege('anon','public.workspace_notify(uuid,text,text,text,uuid,text,text)','EXECUTE') as allowed")).rows[0].allowed, true);
     }
     await db.exec(await readFile(`supabase/migrations/${file}`, "utf8"));
+    if (file === supportMigration) assert.deepEqual(await securitySnapshot(), supportSecurityBefore, "Only support INSERT predicate changes; reads/grants/functions/triggers preserved");
     if (file === "20261028000000_harden_workspace_privileges.sql") assert.deepEqual((await privileges()).rows, functionPrivilegesBefore, "Hardening preserves all other RPC grants");
   } catch (error) {
     console.error(
@@ -388,4 +401,54 @@ console.log('PASS: direct helper denial; mark-one/mark-all retained; content/rec
 await db.exec('reset role');
 await db.exec(await readFile('scripts/verify-workspace-privileges.sql','utf8'));
 console.log('PASS: post-deployment verification SQL executes read-only locally.');
+// Exercise the report policy directly, without API authorization masking RLS failures.
+await db.exec('reset role');
+await db.query("select set_config('request.jwt.claim.sub','',false)");
+const supportUsers = ['student','mentor','company','university','founder'];
+const supportIds = supportUsers.map((_, i) => `00000000-0000-4000-9000-${String(i + 1).padStart(12,'0')}`);
+for (let i = 0; i < supportUsers.length; i++) {
+  await db.query("insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values($1,$2,now(),jsonb_build_object('role',$3::text))", [supportIds[i], `support${i}@example.test`, supportUsers[i]]);
+}
+await db.query("update public.profiles set onboarding_completed=true where id=any($1::uuid[])", [supportIds]);
+const insertReport = "insert into public.support_reports(user_id,category,subject,message) values($1,'support','Help needed','Please help with my workspace') returning id";
+const reportIds = [];
+for (const id of supportIds) {
+  await as(id);
+  reportIds.push(await scalar(insertReport, [id]));
+  assert.equal(await scalar('select count(*)::int from public.support_reports'), 1);
+  await rejects(insertReport, [supportIds.find(x => x !== id)]);
+}
+await as(supportIds[0]);
+assert.equal(await scalar('select count(*)::int from public.support_reports where id=$1', [reportIds[1]]), 0);
+assert.equal((await db.query("update public.support_reports set subject='Changed' returning id")).rows.length, 0);
+assert.equal((await db.query('delete from public.support_reports returning id')).rows.length, 0);
+await db.exec('reset role');
+await db.query("select set_config('request.jwt.claim.sub','',false)");
+await db.exec('set role anon');
+await rejects(insertReport, [supportIds[0]]);
+for (const mutation of ["account_status='suspended'", "account_status='disabled'", 'onboarding_completed=false', 'primary_role=null']) {
+  await db.exec('reset role');
+  await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query(`update public.profiles set ${mutation} where id=$1`, [supportIds[0]]);
+  await as(supportIds[0]);
+  await rejects(insertReport, [supportIds[0]]);
+  await db.exec('reset role');
+  await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query("update public.profiles set account_status='active',onboarding_completed=true,primary_role='student' where id=$1", [supportIds[0]]);
+}
+await db.query('update auth.users set email_confirmed_at=null where id=$1', [supportIds[0]]);
+await as(supportIds[0]);
+await rejects(insertReport, [supportIds[0]]);
+// No profile is also invalid even with an authenticated database role.
+await as('00000000-0000-4000-9000-999999999999');
+await rejects(insertReport, [supportIds[0]]);
+await db.exec('reset role');
+assert.equal(await scalar('select count(*)::int from public.support_reports where id=any($1::uuid[])',[reportIds]), 5, 'Owner visibility remains');
+await db.exec('set role service_role');
+assert.equal(await scalar('select count(*)::int from public.support_reports where id=any($1::uuid[])',[reportIds]), 5, 'Existing service visibility remains');
+await db.exec('reset role');
+const supportSecurityBeforeRepeat = await securitySnapshot();
+await db.exec(await readFile(`supabase/migrations/${supportMigration}`, 'utf8'));
+assert.deepEqual(await securitySnapshot(), supportSecurityBeforeRepeat, 'Reapplying policy correction changes no other security metadata');
+console.log('PASS: support reports for all five primary roles; anon/inactive/unverified/not-onboarded/null/missing profile denied; spoofing denied; private reads; no update/delete; owner/service access and unrelated security preserved.');
 await db.close();

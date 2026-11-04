@@ -10,16 +10,33 @@ import {
 } from "react";
 import { workspaceApi } from "@/lib/api/workspace";
 import type { Workspace } from "@/lib/api/types";
+import { usePathname } from "next/navigation";
+
+export type RefreshScope = "workspace" | "notifications" | "none";
+
+function withNotifications(data: Workspace, items: Workspace["notifications"]): Workspace {
+  return {
+    ...data,
+    notifications: items,
+    notification_details_loaded: true,
+    pending: data.pending?.filter((key) => key !== "notifications"),
+    counts: { ...data.counts, notifications: items.filter((n) => !n.read_at).length },
+    module_unread: Object.fromEntries(Object.keys(data.module_unread).map((module) => [
+      module, items.filter((n) => n.source_module === module && !n.read_at).length,
+    ])),
+  };
+}
 
 interface State {
   data: Workspace | null;
   error: string;
   loading: boolean;
   refresh: () => Promise<void>;
-  mutate: (operation: () => Promise<unknown>) => Promise<void>;
+  loadNotifications?: () => Promise<void>;
+  mutate: (operation: () => Promise<unknown>, scope?: RefreshScope) => Promise<void>;
 }
 export const WorkspaceContext = createContext<State | null>(null);
-export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
+export function WorkspaceProvider({ children, progressive = false, compactNotifications = progressive }: { children: React.ReactNode; progressive?: boolean; compactNotifications?: boolean }) {
   const [data, setData] = useState<Workspace | null>(null),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true);
@@ -28,6 +45,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const controller = useRef<AbortController | null>(null);
   const revision = useRef(0);
   const lastSettled = useRef(0);
+  const noticeRevision = useRef(0);
+  const noticeFlight = useRef<Promise<void> | null>(null);
+  const noticeController = useRef<AbortController | null>(null);
+  const initialized = useRef(false);
+  const notificationsRequested = useRef(false);
   const refresh = useCallback((): Promise<void> => {
     if (inFlight.current) return inFlight.current;
     const run = async () => {
@@ -35,17 +57,29 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       let version: number;
       do {
         version = revision.current;
+        const noticeVersion = noticeRevision.current;
         const request = new AbortController();
         controller.current = request;
         try {
-          const next = await workspaceApi.load(request.signal);
+          const next = progressive && !initialized.current
+            ? await workspaceApi.progressive((partial) => {
+                if (mounted.current && !request.signal.aborted && version === revision.current) {
+                  setData((previous) => previous && noticeVersion !== noticeRevision.current
+                    ? withNotifications(partial, previous.notifications) : partial);
+                  setLoading(false);
+                }
+              }, request.signal)
+            : await (compactNotifications && !notificationsRequested.current ? workspaceApi.summary : workspaceApi.load)(request.signal);
           if (
             mounted.current &&
             !request.signal.aborted &&
             version === revision.current
           ) {
-            setData(next);
+            // A full read started before a targeted update must not undo it.
+            setData((previous) => previous && noticeVersion !== noticeRevision.current
+              ? withNotifications(next, previous.notifications) : next);
             setError("");
+            initialized.current = true;
           }
         } catch (e) {
           if (
@@ -68,6 +102,33 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       lastSettled.current = Date.now();
     });
     return inFlight.current;
+  }, [progressive, compactNotifications]);
+  const refreshNotifications = useCallback((): Promise<void> => {
+    notificationsRequested.current = true;
+    if (noticeFlight.current) return noticeFlight.current;
+    const run = async () => {
+      let version: number;
+      let workspaceVersion: number;
+      do {
+        version = noticeRevision.current;
+        workspaceVersion = revision.current;
+        const request = new AbortController();
+        noticeController.current = request;
+        const result = await workspaceApi.notifications(request.signal);
+        if (!mounted.current || request.signal.aborted) return;
+        if (version === noticeRevision.current && workspaceVersion === revision.current) {
+          // Invalidate older full snapshots as well as older notification reads.
+          noticeRevision.current++;
+          setData((previous) => previous ? withNotifications(previous, result.items) : previous);
+          return;
+        }
+      } while (mounted.current);
+    };
+    noticeFlight.current = run().finally(() => {
+      noticeFlight.current = null;
+      noticeController.current = null;
+    });
+    return noticeFlight.current;
   }, []);
   useEffect(() => {
     mounted.current = true;
@@ -99,21 +160,30 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       document.removeEventListener("visibilitychange", focus);
       // StrictMode immediately replays this effect; share its existing request.
       queueMicrotask(() => {
-        if (!mounted.current) controller.current?.abort();
+        if (!mounted.current) {
+          controller.current?.abort();
+          noticeController.current?.abort();
+        }
       });
     };
   }, [refresh]);
   const mutate = useCallback(
-    async (operation: () => Promise<unknown>) => {
+    async (operation: () => Promise<unknown>, scope: RefreshScope = "workspace") => {
       await operation();
+      if (!mounted.current || scope === "none") return;
+      if (scope === "notifications") {
+        noticeRevision.current++;
+        await refreshNotifications();
+        return;
+      }
       revision.current++;
       if (mounted.current) await refresh();
     },
-    [refresh],
+    [refresh, refreshNotifications],
   );
   const value = useMemo(
-    () => ({ data, error, loading, refresh, mutate }),
-    [data, error, loading, refresh, mutate],
+    () => ({ data, error, loading, refresh, mutate, loadNotifications: refreshNotifications }),
+    [data, error, loading, refresh, mutate, refreshNotifications],
   );
   return (
     <WorkspaceContext.Provider value={value}>
@@ -129,7 +199,16 @@ export function useWorkspace() {
 }
 export function WorkspaceGate({ children }: { children: React.ReactNode }) {
   const { data, error, loading, refresh } = useWorkspace();
-  if (loading)
+  const pathname = usePathname();
+  const routeModule = pathname.split("/")[2];
+  const detailRoute = pathname.split("/").filter(Boolean).length === 3 &&
+    ["projects", "communities", "opportunities", "events", "applications", "mentorship"].includes(routeModule);
+  // Detail endpoints authorize and load their own item; catalogs are secondary.
+  const required = detailRoute ? [] : routeModule === "mentorship" ? ["mentors", "sessions"]
+    : routeModule === "projects" || routeModule === "communities" ? [routeModule, "invitations"]
+    : [routeModule];
+  const pending = data?.pending?.some((key) => required.includes(key));
+  if (loading || (pending && !error))
     return (
       <div
         aria-busy="true"
@@ -173,7 +252,15 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
           </button>
         </p>
       ) : null}
-      {children}
+      {pending ? <p role="status">This section has not loaded yet.</p> : children}
     </>
   );
+}
+
+export function WorkspaceSection({ needs, children }: { needs: string[]; children: React.ReactNode }) {
+  const { data } = useWorkspace();
+  if (data?.pending?.some((key) => needs.includes(key))) return (
+    <div role="status" aria-busy="true" className="sw-card my-5 text-sm text-slate-500">Loading this section…</div>
+  );
+  return <>{children}</>;
 }

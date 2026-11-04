@@ -219,6 +219,8 @@ export interface MentorConnection {
   matched_skills?: string[];
 }
 export interface Workspace {
+  pending?: string[];
+  notification_details_loaded?: boolean;
   mentor_hub?: MentorHubData;
   mentor?: {
     profile: Record<string, string | number | boolean | string[] | null>;

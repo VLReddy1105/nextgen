@@ -5,11 +5,20 @@ from app.services.concurrency import gather
 
 
 async def mentor_workspace(current, projects=()):
+    return mentor_projection(current, await mentor_reads(current), projects)
+
+
+async def mentor_reads(current):
     require(current.role == "mentor")
-    profiles, connections = await gather(
+    return await gather(
         current.repo.rows("mentor_profiles", user_id=f"eq.{current.id}"),
         current.repo.rpc("eco_connections", {}),
     )
+
+
+def mentor_projection(current, reads, projects=()):
+    require(current.role == "mentor")
+    profiles, connections = reads
     profile = {**(profiles[0] if profiles else {}),
                "full_name": current.profile.get("full_name", "")}
     own = tags((profile.get("skills") or []) + (profile.get("expertise") or []))

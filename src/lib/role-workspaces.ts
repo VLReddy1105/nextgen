@@ -29,6 +29,7 @@ export const roleModules: Record<string, string[]> = {
     "notifications",
     "profile",
     "settings",
+    "help",
   ],
   university: [
     "overview",
@@ -45,6 +46,7 @@ export const roleModules: Record<string, string[]> = {
     "notifications",
     "profile",
     "settings",
+    "help",
   ],
   mentor: [
     "overview",
@@ -60,6 +62,7 @@ export const roleModules: Record<string, string[]> = {
     "events",
     "notifications",
     "settings",
+    "help",
   ],
   founder: [
     "overview",
@@ -70,9 +73,11 @@ export const roleModules: Record<string, string[]> = {
     "notifications",
     "profile",
     "settings",
+    "help",
   ],
 };
 export function moduleLabel(role: string, key: string) {
+  if (key === "help") return "Help & Support";
   if (key === "mentors")
     return role === "mentor" ? "My Affiliation" : "Mentors";
   if (key === "mentor-opportunities") return "Mentor Opportunities";

@@ -5,7 +5,7 @@ import { Publishing } from "@/components/ecosystem/Publishing";
 import { Editor } from "@/components/ecosystem/Editor";
 import { api } from "@/lib/api/client";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { workspaceApi } from "@/lib/api/workspace";
 import type { Item, Module, Post } from "@/lib/api/types";
 import { useWorkspace } from "./WorkspaceProvider";
@@ -17,20 +17,33 @@ import { MutationRefresh } from "@/components/ecosystem/MutationRefresh";
 export function StudentDetail({ kind, id }: { kind: Module; id: string }) {
   const [item, setItem] = useState<Item | null>(null),
     [error, setError] = useState("");
+  const [resultKey, setResultKey] = useState("");
+  const itemKey = `${kind}/${id}`;
   const search = useSearchParams(),
     { data } = useWorkspace();
+  const request = useRef<AbortController | null>(null);
+  const relevantItems = data?.[kind === "mentorship" ? "mentors" : kind];
   const load = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
     try {
-      setItem(await workspaceApi.detail(kind, id));
+      const next = await workspaceApi.detail(kind, id, controller.signal);
+      if (controller.signal.aborted) return;
+      setItem(next);
       setError("");
+      setResultKey(`${kind}/${id}`);
     } catch (e) {
+      if (controller.signal.aborted) return;
       setError(e instanceof Error ? e.message : "Could not load this item.");
+      setResultKey(`${kind}/${id}`);
     }
   }, [kind, id]);
   useEffect(() => {
     void load();
-  }, [load, data]);
-  if (error)
+    return () => request.current?.abort();
+  }, [load, data?.profile, relevantItems, data?.invitations, data?.mentor_hub]);
+  if (resultKey === itemKey && error)
     return (
       <div role="alert" className="sw-card">
         <p>{error}</p>
@@ -39,7 +52,7 @@ export function StudentDetail({ kind, id }: { kind: Module; id: string }) {
         </button>
       </div>
     );
-  if (!item)
+  if (!item || resultKey !== itemKey)
     return (
       <div
         aria-busy="true"
@@ -157,13 +170,6 @@ export function StudentDetail({ kind, id }: { kind: Module; id: string }) {
             }
           />
         </>
-      )}
-      {kind === "mentorship" && data?.profile.primary_role === "student" && (
-        <div className="mt-4">
-          <Action run={() => api(`/mentorship/${id}/request`, "POST")}>
-            Request mentorship
-          </Action>
-        </div>
       )}
       {kind === "communities" &&
         tab === "events" &&

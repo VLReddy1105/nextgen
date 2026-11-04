@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { workspaceApi } from "@/lib/api/workspace";
 import type { Item } from "@/lib/api/types";
 import { useWorkspace } from "./WorkspaceProvider";
@@ -14,28 +14,35 @@ export function StudentActivity({
   view: string;
 }) {
   const { data } = useWorkspace();
+  const spaces = data?.[kind];
+  const request = useRef<AbortController | null>(null);
   const [items, setItems] = useState<Item[]>([]),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
   const load = useCallback(async () => {
-    if (!data) return;
+    if (!spaces) return;
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
     try {
-      setItems(
-        await Promise.all(
-          data[kind]
+      const next = await Promise.all(
+          spaces
             .filter((i) => i.joined)
-            .map((i) => workspaceApi.detail(kind, i.id)),
-        ),
+            .map((i) => workspaceApi.detail(kind, i.id, controller.signal)),
       );
+      if (controller.signal.aborted) return;
+      setItems(next);
       setError("");
     } catch (e) {
+      if (controller.signal.aborted) return;
       setError(e instanceof Error ? e.message : "Could not load activity.");
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
-  }, [data, kind]);
+  }, [spaces, kind]);
   useEffect(() => {
     void load();
+    return () => request.current?.abort();
   }, [load]);
   const title =
     view === "tasks"

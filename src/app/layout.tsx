@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  icons: { icon: "/favicon.svg" },
   title: {
     default: "GenZnect | People, Opportunities and Ideas in One Place",
     template: "%s | GenZnect",

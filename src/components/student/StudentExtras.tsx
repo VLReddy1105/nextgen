@@ -5,13 +5,21 @@ import { api } from "@/lib/api/client";
 import { useWorkspace } from "./WorkspaceProvider";
 import { workspaceApi } from "@/lib/api/workspace";
 import { Action, Empty } from "./StudentModules";
+import { helpTopics, roleHelp } from "@/lib/workspace-help";
 
 export function StudentNotifications() {
-  const { data, mutate } = useWorkspace();
+  const { data, mutate, loadNotifications } = useWorkspace();
   const [error, setError] = useState("");
+  const needsDetails = data?.notification_details_loaded === false;
+  useEffect(() => {
+    if (needsDetails) void loadNotifications?.().catch((e) => setError(e.message));
+  }, [needsDetails, loadNotifications]);
   const mark = (id: string) =>
-    void mutate(() => workspaceApi.read(id)).catch((e) => setError(e.message));
+    void mutate(() => workspaceApi.read(id), "notifications").catch((e) => setError(e.message));
   if (!data) return null;
+  if (needsDetails) return <section><h1 className="sw-title">Your updates</h1>
+    {error ? <p role="alert">{error} <button onClick={() => void loadNotifications?.().catch((e) => setError(e.message))}>Retry</button></p>
+      : <p role="status" aria-busy="true">Loading notifications…</p>}</section>;
   return (
     <>
       <h1 className="sw-title">Your updates</h1>
@@ -20,7 +28,7 @@ export function StudentNotifications() {
         The moments that move your journey forward.
       </p>
       <div className="my-5">
-        <Action secondary run={() => workspaceApi.readAll()}>
+        <Action secondary refreshScope="notifications" run={() => workspaceApi.readAll()}>
           Mark all read
         </Action>
       </div>
@@ -53,7 +61,7 @@ export function StudentNotifications() {
                 Open update →
               </Link>
               {!n.read_at ? (
-                <Action secondary run={() => workspaceApi.read(n.id)}>
+                <Action secondary refreshScope="notifications" run={() => workspaceApi.read(n.id)}>
                   Mark read
                 </Action>
               ) : null}
@@ -330,7 +338,10 @@ export function StudentSettings() {
             : "Account verification"}
         </h2>
         <p className="sw-muted mt-3">
-          Email verified ✓ ·{" "}
+          {data?.profile.email_verified
+            ? "Email verified ✓"
+            : "Email not verified"}{" "}
+          ·{" "}
           {data?.profile.primary_role !== "student"
             ? `${data?.profile.primary_role} account`
             : data?.profile.memberships.length
@@ -362,16 +373,19 @@ export function StudentSettings() {
               Receive new in-app notifications
             </label>
             <div className="mt-4">
-              <Action
-                run={() =>
-                  api("/settings", "PUT", {
-                    in_app_notifications: enabled,
-                    profile_visibility: visibility,
-                  })
-                }
-              >
-                Save preferences
-              </Action>
+              {loaded && (
+                <Action
+                  refreshScope="none"
+                  run={() =>
+                    api("/settings", "PUT", {
+                      in_app_notifications: enabled,
+                      profile_visibility: visibility,
+                    })
+                  }
+                >
+                  Save preferences
+                </Action>
+              )}
             </div>
           </>
         )}
@@ -400,7 +414,9 @@ export function StudentSettings() {
   );
 }
 export function StudentHelp() {
-  const [category, setCategory] = useState("problem"),
+  const { data } = useWorkspace();
+  const role = data?.profile.primary_role || "student";
+  const [category, setCategory] = useState("Login / Account"),
     [subject, setSubject] = useState(""),
     [message, setMessage] = useState(""),
     [received, setReceived] = useState("");
@@ -411,26 +427,22 @@ export function StudentHelp() {
       <section className="sw-card mt-6">
         <h2 className="sw-section">Help Center</h2>
         {[
+          ...(roleHelp[role] || []),
           [
-            "How do I verify my university?",
-            "Add your education to your profile, then ask your university to enroll your verified account or send an invitation.",
+            "How do I protect my account?",
+            "Use Settings to reset your password. Never share passwords, verification codes, access tokens or private invitation links in a support report.",
+            "settings",
           ],
-          [
-            "Where can I track applications?",
-            "Open Applications to see your status and timeline. Updates also appear in Notifications.",
-          ],
-          [
-            "Can I use GenZnect independently?",
-            "Yes. University verification is only required for restricted campus content.",
-          ],
-          [
-            "How are recommendations chosen?",
-            "Your skills, interests and preferences are matched using deterministic rules. Update My Profile to refresh them.",
-          ],
-        ].map(([q, a]) => (
+        ].map(([q, a, route]) => (
           <details key={q} className="mt-4 border-b border-slate-100 pb-4">
             <summary className="font-medium">{q}</summary>
             <p className="sw-muted mt-3">{a}</p>
+            <Link
+              href={`/dashboard/${route}`}
+              className="mt-3 inline-block text-blue-700"
+            >
+              Open workspace page →
+            </Link>
           </details>
         ))}
       </section>
@@ -440,66 +452,97 @@ export function StudentHelp() {
           Communicate professionally. Do not harass others, misrepresent
           opportunities, share confidential information without permission, or
           publish work you do not have the rights to use. Report harmful
-          behavior and suspicious opportunities below.
+          behavior and suspicious opportunities using the available reporting
+          options.
         </p>
       </section>
       <section className="sw-card mt-4">
         <h2 className="sw-section">Report a problem / Contact support</h2>
-        <label className="sw-label mt-4 block">
-          Category
-          <select
-            className="sw-input"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
-            <option value="problem">Report a problem</option>
-            <option value="opportunity">Report an opportunity</option>
-            <option value="support">Contact support</option>
-          </select>
-        </label>
-        <label className="sw-label mt-4 block">
-          Subject
-          <input
-            className="sw-input"
-            value={subject}
-            maxLength={160}
-            onChange={(e) => setSubject(e.target.value)}
-          />
-        </label>
-        <label className="sw-label mt-4 block">
-          Details
-          <textarea
-            className="sw-input"
-            value={message}
-            maxLength={4000}
-            onChange={(e) => setMessage(e.target.value)}
-          />
-        </label>
-        <div className="mt-4">
-          <Action
-            run={async () => {
-              if (subject.trim().length < 2 || message.trim().length < 10)
-                throw new Error(
-                  "Enter a subject and at least ten characters of detail.",
-                );
-              const r = await api<{ id: string }>("/support/reports", "POST", {
-                category,
-                subject,
-                message,
-              });
-              setReceived(r.id);
-              setMessage("");
-            }}
-          >
-            Submit report
-          </Action>
-        </div>
-        {received ? (
-          <p role="status" className="mt-4 text-sm text-emerald-700">
-            Report saved. Reference: {received}. The project maintainer can
-            review it; no response time is guaranteed.
-          </p>
-        ) : null}
+        <p className="sw-muted mt-3">
+          Do not share passwords, verification codes, tokens, or private
+          invitation links.
+        </p>
+        {helpTopics[role] && (
+          <>
+            <label className="sw-label mt-4 block">
+              Category
+              <select
+                className="sw-input"
+                value={category}
+                aria-label="Category"
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  setReceived("");
+                }}
+              >
+                {(helpTopics[role] || []).map((topic) => (
+                  <option key={topic}>{topic}</option>
+                ))}
+              </select>
+            </label>
+            <label className="sw-label mt-4 block">
+              Subject
+              <input
+                className="sw-input"
+                value={subject}
+                aria-label="Subject"
+                maxLength={160}
+                onChange={(e) => {
+                  setSubject(e.target.value);
+                  setReceived("");
+                }}
+              />
+            </label>
+            <label className="sw-label mt-4 block">
+              Details
+              <textarea
+                className="sw-input"
+                value={message}
+                aria-label="Details"
+                maxLength={3900}
+                onChange={(e) => {
+                  setMessage(e.target.value);
+                  setReceived("");
+                }}
+              />
+            </label>
+            <div className="mt-4">
+              <Action
+                refreshScope="none"
+                run={async () => {
+                  if (subject.trim().length < 2 || message.trim().length < 10)
+                    throw new Error(
+                      "Enter a subject and at least ten characters of detail.",
+                    );
+                  const r = await api<{ id: string }>(
+                    "/support/reports",
+                    "POST",
+                    {
+                      category:
+                        category === "Suspicious Opportunity"
+                          ? "opportunity"
+                          : ["Suggestion", "Other"].includes(category)
+                            ? "support"
+                            : "problem",
+                      subject: subject.trim(),
+                      message: `[${category}] ${message.trim()}`,
+                    },
+                  );
+                  setReceived(r.id);
+                  setMessage("");
+                }}
+              >
+                Submit report
+              </Action>
+            </div>
+            {received ? (
+              <p role="status" className="mt-4 text-sm text-emerald-700">
+                Report saved. Reference: {received}. The project maintainer can
+                review it; no response time is guaranteed.
+              </p>
+            ) : null}
+          </>
+        )}
       </section>
     </>
   );

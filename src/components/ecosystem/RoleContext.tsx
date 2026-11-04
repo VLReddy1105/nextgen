@@ -1,9 +1,11 @@
 "use client";
 import Link from "next/link";
-import { MentorContextBadge } from "./MentorAffiliations";
+import { usePathname } from "next/navigation";
+import { MentorContextBadge } from "./MentorContextBadge";
 import { useWorkspace } from "@/components/student/WorkspaceProvider";
 export function RoleContext() {
   const { data } = useWorkspace();
+  const pathname = usePathname();
   if (!data) return null;
   const role = data.profile.primary_role;
   const next =
@@ -25,54 +27,61 @@ export function RoleContext() {
     .slice(0, 3);
   return (
     <aside aria-label="Workspace context" className="sw-context">
-      {role === "mentor" && <MentorContextBadge />}
-      <section className="sw-card">
-        <h2 className="sw-section">
-          {role === "company"
-            ? "Recent applicants"
-            : role === "mentor"
-              ? "Mentorship requests"
-              : role === "university"
-                ? "Campus next steps"
-                : "Your projects"}
-        </h2>
-        {role === "company" ? (
-          data.applications.slice(0, 3).map((a) => (
-            <Link
-              className="sw-muted mt-3 block"
-              key={a.id}
-              href={`/dashboard/applications/${a.id}`}
-            >
-              {a.full_name || "Applicant"} · {a.title} · {a.status}
-            </Link>
-          ))
-        ) : role === "mentor" ? (
-          <p className="sw-muted mt-3">
-            {data.counts.requests || 0} pending requests ·{" "}
-            {data.counts.connections || 0} accepted connections
-          </p>
-        ) : role === "university" ? (
-          <p className="sw-muted mt-3">
-            {data.counts.students || 0} connected students. Review invitations
-            and verified-domain requests before connecting.
-          </p>
-        ) : (
-          <p className="sw-muted mt-3">
-            {data.projects.filter((p) => p.joined).length} participating
-            projects · {data.communities.filter((c) => c.joined).length} joined
-            communities
-          </p>
-        )}
-        {role === "company" && !data.applications.length && (
-          <p className="sw-muted mt-3">
-            Applicants appear after students apply to your published
-            opportunities.
-          </p>
-        )}
-        <Link className="sw-button mt-4" href={`/dashboard/${next[1]}`}>
-          {next[0]}
-        </Link>
-      </section>
+      {role === "mentor" &&
+        ![
+          "/dashboard/overview",
+          "/dashboard/profile",
+          "/dashboard/mentors",
+        ].includes(pathname) && <MentorContextBadge />}
+      {!(role === "company" && pathname === "/dashboard/overview") && (
+        <section className="sw-card">
+          <h2 className="sw-section">
+            {role === "company"
+              ? "Recent applicants"
+              : role === "mentor"
+                ? "Mentorship requests"
+                : role === "university"
+                  ? "Campus next steps"
+                  : "Your projects"}
+          </h2>
+          {role === "company" ? (
+            data.applications.slice(0, 3).map((a) => (
+              <Link
+                className="sw-muted mt-3 block"
+                key={a.id}
+                href={`/dashboard/applications/${a.id}`}
+              >
+                {a.full_name || "Applicant"} · {a.title} · {a.status}
+              </Link>
+            ))
+          ) : role === "mentor" ? (
+            <p className="sw-muted mt-3">
+              {data.counts.requests || 0} pending requests ·{" "}
+              {data.counts.connections || 0} accepted connections
+            </p>
+          ) : role === "university" ? (
+            <p className="sw-muted mt-3">
+              {data.counts.students || 0} connected students. Review invitations
+              and verified-domain requests before connecting.
+            </p>
+          ) : (
+            <p className="sw-muted mt-3">
+              {data.projects.filter((p) => p.joined).length} participating
+              projects · {data.communities.filter((c) => c.joined).length}{" "}
+              joined communities
+            </p>
+          )}
+          {role === "company" && !data.applications.length && (
+            <p className="sw-muted mt-3">
+              Applicants appear after students apply to your published
+              opportunities.
+            </p>
+          )}
+          <Link className="sw-button mt-4" href={`/dashboard/${next[1]}`}>
+            {next[0]}
+          </Link>
+        </section>
+      )}
       <section className="sw-card">
         <h2 className="sw-section">
           Upcoming {role === "mentor" ? "sessions" : "events"}

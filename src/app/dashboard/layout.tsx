@@ -28,7 +28,7 @@ export default async function DashboardLayout({
   const name = displayName(session.profile?.full_name, session.user.email);
 
   return (
-    <StudentShell user={{ name, initials: initials(name) }}>
+    <StudentShell key={`${session.user.id}:${session.profile.primary_role}`} identity={session.user.id} role={session.profile.primary_role} user={{ name, initials: initials(name) }}>
       {children}
     </StudentShell>
   );

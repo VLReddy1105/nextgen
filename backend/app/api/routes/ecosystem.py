@@ -9,6 +9,7 @@ from app.schemas.ecosystem import (
     Announcement,
 )
 from app.core.errors import require
+from app.services.concurrency import gather
 from app.schemas.ecosystem import SpaceInvite
 import secrets, hashlib
 
@@ -33,15 +34,24 @@ async def invite_student(id: UUID, body: SpaceInvite, current: Current):
 
 @router.get("/campus")
 async def campus(current: Current):
-    orgs = await current.repo.rows("organizations")
+    orgs, domains, requests, request_rows, invitations, announcements = await gather(
+        current.repo.rows("organizations"),
+        current.repo.rows("university_domains"),
+        current.repo.rpc("eco_campus_requests", {}),
+        current.repo.rows("university_connection_requests"),
+        current.repo.rpc("eco_campus_invitations", {})
+        if current.role == "student" else current.repo.rows(
+            "university_student_invitations",
+            select="id,email,program,department,status,expires_at",
+        ),
+        current.repo.rows("campus_announcements", order="created_at.desc"),
+    )
     own = [
         o for o in orgs if o["created_by"] == current.id and o["type"] == "university"
     ]
-    domains = await current.repo.rows("university_domains")
-    requests = await current.repo.rpc("eco_campus_requests", {})
     # RLS scopes both reads; enrich the existing narrow name projection with
     # the campus identity so a Student cannot submit the same pending request.
-    scoped_requests = {r["id"]: r for r in await current.repo.rows("university_connection_requests")}
+    scoped_requests = {r["id"]: r for r in request_rows}
     requests = [{**r, "university_id": scoped_requests.get(r["id"], {}).get("university_id")} for r in requests]
     return {
         "organizations": orgs,
@@ -52,17 +62,8 @@ async def campus(current: Current):
             if d["approved_at"] and d["domain"] == current.email.lower().split("@")[-1]
         ],
         "requests": requests,
-        "invitations": (
-            await current.repo.rpc("eco_campus_invitations", {})
-            if current.role == "student"
-            else await current.repo.rows(
-                "university_student_invitations",
-                select="id,email,program,department,status,expires_at",
-            )
-        ),
-        "announcements": await current.repo.rows(
-            "campus_announcements", order="created_at.desc"
-        ),
+        "invitations": invitations,
+        "announcements": announcements,
         "progress": (
             await current.repo.rpc(
                 "eco_campus_progress", {"p_university": own[0]["id"]}

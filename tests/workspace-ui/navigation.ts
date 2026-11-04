@@ -6,4 +6,5 @@ export const useRouter = () => ({
     location.href = url;
   },
   refresh: () => {},
+  prefetch: () => {},
 });
