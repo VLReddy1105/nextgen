@@ -34,7 +34,11 @@ export function Publishing({
   communityId?: string;
 }) {
   const { data } = useWorkspace();
-  const org = data?.organizations?.[0],
+  const org = data?.organizations?.find((o) =>
+      item?.organization_id
+        ? o.id === item.organization_id
+        : o.type === data.profile.primary_role,
+    ),
     isEvent = kind === "events";
   const fields: Field[] = [
     ...common,

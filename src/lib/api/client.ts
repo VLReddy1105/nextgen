@@ -60,6 +60,12 @@ export async function apiRequest(
   }
   if (!response.ok) {
     const result = await response.json().catch(() => null);
+    if (response.status === 404 && path === "/workspace/progressive")
+      throw new WorkspaceError(
+        "The workspace API is out of date. Restart the backend with the current code, then retry.",
+        "WORKSPACE_API_MISMATCH",
+        404,
+      );
     throw new WorkspaceError(
       result?.error?.message || "The request could not be completed.",
       result?.error?.code || "REQUEST_FAILED",

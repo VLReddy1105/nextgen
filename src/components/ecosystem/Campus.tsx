@@ -63,7 +63,7 @@ export function Campus({
       .catch((e) => setError(e.message));
   useEffect(() => {
     void load();
-  }, [data]);
+  }, [data?.profile, data?.organizations]);
   if (error)
     return (
       <section className="sw-card" role="alert">
@@ -80,7 +80,7 @@ export function Campus({
       </section>
     );
   if (!campus || !data) return <p aria-busy="true">Loading campus…</p>;
-  const org = data.organizations?.[0];
+  const org = data.organizations?.find((o) => o.type === "university");
   if (mode === "student")
     return (
       <>

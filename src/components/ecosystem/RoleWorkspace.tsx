@@ -19,6 +19,16 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
     setFilter(search.get("view") || "");
   }, [search]);
   if (!data) return null;
+  const organization = data.organizations?.find(
+    (o) => o.type === data.profile.primary_role,
+  );
+  const canPublish =
+    module === "events"
+      ? ["company", "mentor", "founder"].includes(data.profile.primary_role) ||
+        (organization?.type === "university" && organization.verified)
+      : module === "opportunities" &&
+        !!organization &&
+        (organization.type !== "university" || organization.verified);
   const role = data.profile.primary_role,
     rows =
       module === "projects"
@@ -48,7 +58,18 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
             )
             .map(([k, n]) => (
               <Link className="sw-card" href={"/dashboard/" + k} key={k}>
-                <p className="sw-muted capitalize">{moduleLabel(role, k)}</p>
+                <p className="sw-muted capitalize">
+                  {(
+                    {
+                      opportunities: "Published opportunities",
+                      applications: "Active applicants",
+                      projects: "Joined projects",
+                      communities: "Joined communities",
+                      events: "Published upcoming events",
+                      students: "Connected students",
+                    } as Record<string, string>
+                  )[k] || moduleLabel(role, k)}
+                </p>
                 <p className="mt-2 text-3xl font-semibold">{n}</p>
               </Link>
             ))}
@@ -145,14 +166,9 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
       )}
       {["projects", "communities"].includes(module) ? (
         <CreateSpace kind={module as "projects" | "communities"} />
-      ) : (module === "events" ||
-          (module === "opportunities" && data.organizations?.length)) &&
-        (role !== "university" ||
-          data.organizations?.some(
-            (o) => o.type === "university" && o.verified,
-          )) ? (
+      ) : canPublish ? (
         <details className="sw-card mt-5">
-          <summary className="font-semibold">
+          <summary className="sw-button w-fit cursor-pointer">
             Create {module === "events" ? "event" : "opportunity"}
           </summary>
           <Publishing kind={module as "events" | "opportunities"} />
@@ -189,7 +205,15 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
                 ? ["draft", "published", "closed"]
                 : ["mine", "discover", "invited"]
           ).map((s) => (
-            <option key={s}>{s}</option>
+            <option key={s} value={s}>
+              {s === "mine"
+                ? "My spaces"
+                : s === "discover"
+                  ? "Discover spaces"
+                  : s === "invited"
+                    ? "Invited"
+                    : s[0].toUpperCase() + s.slice(1)}
+            </option>
           ))}
         </select>
         <select
@@ -262,11 +286,15 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
             No {module} {q || filter ? "match your filters" : "yet"}.
           </h2>
           <p className="sw-muted mt-3">
-            {module === "applications"
-              ? "Applications appear when students apply to your published opportunities."
-              : "Create your first " +
-                (module === "communities" ? "community" : module.slice(0, -1)) +
-                " to start connecting with students."}
+            {q || filter || search.get("opportunity")
+              ? "Try another search or filter to see other loaded results."
+              : module === "applications"
+                ? "Student applications appear here after they apply to your published opportunities. Mentor applications are reviewed in Mentor Opportunities."
+                : ["projects", "communities"].includes(module)
+                  ? "Use Create above to start a space, or accept an invitation to collaborate. Discover shows spaces you can access."
+                  : canPublish
+                    ? `Use Create ${module === "events" ? "event" : "opportunity"} above to save a draft and publish when ready.`
+                    : "Publishing becomes available when your organization account meets the required verification. Existing content will appear here when available."}
           </p>
         </section>
       )}

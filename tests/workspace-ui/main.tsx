@@ -28,6 +28,7 @@ import {
   StudentAITools,
   StudentNotifications,
   StudentSettings,
+  StudentHelp,
 } from "../../src/components/student/StudentExtras";
 import type { Workspace, Module } from "../../src/lib/api/types";
 const search = new URLSearchParams(location.search),
@@ -125,7 +126,9 @@ if (role !== "student")
     },
   ];
 const component =
-  page === "mentors" ? (
+  page === "help" ? (
+    <StudentHelp />
+  ) : page === "mentors" ? (
     <MentorAffiliations />
   ) : page === "mentor-opportunities" ? (
     <MentorRecruitment />
@@ -325,7 +328,8 @@ function Harness() {
           search.get("state") === "error" ||
           search.get("scenario") === "failure"
             ? null
-            : { ...data },
+            // A completed full JSON workspace response has new nested identities.
+            : structuredClone(data),
         error:
           search.get("scenario") === "failure"
             ? "Controlled connection read failed"
@@ -336,7 +340,9 @@ function Harness() {
         refresh: async () => {},
         mutate: async (run) => {
           if (
-            ["roles", "affiliations"].includes(search.get("scenario") || "")
+            ["roles", "affiliations", "functional"].includes(
+              search.get("scenario") || "",
+            )
           ) {
             await run();
             update((n) => n + 1);

@@ -4,6 +4,7 @@ const config = {
   esbuild: { jsx: "automatic" },
   resolve: {
     alias: {
+      "@/lib/supabase/client": path.resolve("tests/workspace-ui/session-client.ts"),
       "@/lib/api/client": path.resolve("tests/workspace-ui/api.ts"),
       "@": path.resolve("src"),
       "next/link": path.resolve("tests/workspace-ui/link.tsx"),

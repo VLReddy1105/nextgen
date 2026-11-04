@@ -2,8 +2,10 @@
 import Link from "next/link";
 import { roleModules, moduleLabel } from "@/lib/role-workspaces";
 import { RoleContext } from "@/components/ecosystem/RoleContext";
-import { usePathname } from "next/navigation";
-import { useRef, useState } from "react";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import { WorkspacePopover, WorkspacePopovers } from "./WorkspacePopover";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   ArrowUpRight,
   Bell,
@@ -32,6 +34,10 @@ import {
 } from "./WorkspaceProvider";
 import { workspaceApi } from "@/lib/api/workspace";
 import "./student.css";
+
+// Display context only, supplied by the authoritative server layout. API access
+// still validates the session and role independently on every request.
+const VerifiedShellRole = createContext<string | null>(null);
 
 const links = [
   { key: "overview", name: "Overview", icon: LayoutDashboard },
@@ -66,6 +72,7 @@ const links = [
     sub: [
       "All Applications",
       "Applied",
+      "Reviewed",
       "Shortlisted",
       "Interviews",
       "Selected",
@@ -75,6 +82,7 @@ const links = [
     values: [
       "",
       "applied",
+      "reviewed",
       "shortlisted",
       "interview",
       "selected",
@@ -142,6 +150,12 @@ function roleLinks(role: string) {
         sub: ["All opportunities", "Draft", "Published", "Closed"],
         values: ["", "draft", "published", "closed"],
       };
+    if (key === "events")
+      return {
+        ...base,
+        sub: ["All Events", "Draft", "Published", "Cancelled"],
+        values: ["", "draft", "published", "cancelled"],
+      };
     if (key === "projects" || key === "communities")
       return {
         ...base,
@@ -166,44 +180,63 @@ function roleLinks(role: string) {
     return { ...base, name: moduleLabel(role, key) };
   });
 }
-function AccountMenu({ name, initials }: { name: string; initials: string }) {
+function AccountMenu({
+  name,
+  initials,
+  header = false,
+  onNavigate,
+}: {
+  name: string;
+  initials: string;
+  header?: boolean;
+  onNavigate?: () => void;
+}) {
   const { data } = useWorkspace();
+  const serverRole = useContext(VerifiedShellRole);
   return (
-    <details className="relative">
-      <summary className="flex min-h-12 list-none items-center gap-3 rounded-xl p-2 hover:bg-slate-50">
-        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-blue-100 text-xs font-bold text-blue-800">
-          {initials}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-xs font-semibold">{name}</span>
-          <span className="text-[11px] text-slate-500 capitalize">
-            {data?.profile.primary_role || "Account"}
+    <WorkspacePopover
+      onNavigate={onNavigate}
+      label={header ? "Account menu" : "Sidebar account menu"}
+      placement={header ? "bottom" : "top"}
+      trigger={
+        <>
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-blue-100 text-xs font-bold text-blue-800">
+            {initials}
           </span>
-        </span>
-        <ChevronDown className="size-3" />
-      </summary>
-      <div className="absolute bottom-full left-0 z-40 mb-2 w-48 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
-        {[
-          ["Profile", "/dashboard/profile"],
-          ["Account", "/dashboard/settings?section=account"],
-          ["Verification", "/dashboard/settings?section=verification"],
-          ["Settings", "/dashboard/settings"],
-        ].map(([label, href]) => (
-          <Link
-            className="block rounded-lg px-3 py-2 hover:bg-blue-50"
-            key={label}
-            href={href}
+          <span
+            className={
+              header ? "hidden min-w-0 flex-1 sm:block" : "min-w-0 flex-1"
+            }
           >
-            {label}
-          </Link>
-        ))}
-        <form action="/auth/signout" method="post">
-          <button className="w-full rounded-lg px-3 py-2 text-left text-red-700 hover:bg-red-50">
-            Logout
-          </button>
-        </form>
-      </div>
-    </details>
+            <span className="block truncate text-xs font-semibold">{name}</span>
+            <span className="text-[11px] text-slate-500 capitalize">
+              {data?.profile.primary_role || serverRole || "Account"}
+            </span>
+          </span>
+          <ChevronDown className="size-3" />
+        </>
+      }
+    >
+      {[
+        ["Profile", "/dashboard/profile"],
+        ["Account", "/dashboard/settings#account"],
+        ["Verification", "/dashboard/settings#verification"],
+        ["Settings", "/dashboard/settings"],
+      ].map(([label, href]) => (
+        <Link
+          className="block rounded-lg px-3 py-2 hover:bg-blue-50"
+          key={label}
+          href={href}
+        >
+          {label}
+        </Link>
+      ))}
+      <form action="/auth/signout" method="post">
+        <button className="w-full rounded-lg px-3 py-2 text-left text-red-700 hover:bg-red-50">
+          Logout
+        </button>
+      </form>
+    </WorkspacePopover>
   );
 }
 function Sidebar({
@@ -215,16 +248,31 @@ function Sidebar({
   initials: string;
   onClose?: () => void;
 }) {
+  const serverRole = useContext(VerifiedShellRole);
+  const router = useRouter();
+  const prefetched = useRef(new Set<string>());
+  const prefetch = (key: string) => {
+    if (prefetched.current.has(key)) return;
+    prefetched.current.add(key);
+    router.prefetch(`/dashboard/${key}`);
+  };
   const pathname = usePathname(),
+    search = useSearchParams(),
     { data } = useWorkspace();
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expansion, setExpansion] = useState<{
+    path: string;
+    key: string | null;
+  } | null>(null);
+  const navigationKey = `${pathname}?${search.toString()}`;
+  const expanded =
+    expansion?.path === navigationKey ? expansion.key : pathname.split("/")[2];
   return (
     <div className="flex h-full flex-col bg-white px-4 pb-4 pt-6">
       <div className="flex items-start justify-between px-2">
         <div>
           <GenZnectLogo />
           <p className="mt-3 text-[9px] font-bold tracking-[.19em] text-slate-400">
-            {data?.profile.primary_role.toUpperCase() || "YOUR"} WORKSPACE
+            {(data?.profile.primary_role || serverRole)?.toUpperCase() || "YOUR"} WORKSPACE
           </p>
         </div>
         {onClose ? (
@@ -237,84 +285,101 @@ function Sidebar({
         aria-label="Workspace navigation"
         className="mt-7 min-h-0 flex-1 space-y-1 overflow-y-auto"
       >
-        {roleLinks(data?.profile.primary_role || "student").map(
-          (item, index) => {
-            const active =
-                pathname === `/dashboard/${item.key}` ||
-                pathname.startsWith(`/dashboard/${item.key}/`),
-              open = expanded === item.key;
-            const count =
-              item.key === "notifications"
-                ? data?.counts.notifications
-                : (data?.counts[item.key] ?? 0);
-            return (
+        {roleLinks(data?.profile.primary_role || serverRole || "student").map((item) => {
+          const active =
+              pathname === `/dashboard/${item.key}` ||
+              pathname.startsWith(`/dashboard/${item.key}/`),
+            open = expanded === item.key;
+          const count =
+            item.key === "notifications"
+              ? data?.counts.notifications
+              : (data?.counts[item.key] ?? 0);
+          return (
+            <div
+              key={item.key}
+              className={
+                item.key === "settings"
+                  ? "mt-5 border-t border-slate-100 pt-5"
+                  : ""
+              }
+            >
               <div
-                key={item.key}
-                className={
-                  index === 10 ? "mt-5 border-t border-slate-100 pt-5" : ""
-                }
+                className={`flex items-center rounded-xl ${active ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-50"}`}
               >
-                <div
-                  className={`flex items-center rounded-xl ${active ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-50"}`}
+                <Link
+                  prefetch={false}
+                  onPointerEnter={() => prefetch(item.key)}
+                  onFocus={() => prefetch(item.key)}
+                  onClick={() => {
+                    setExpansion({
+                      path: `/dashboard/${item.key}?`,
+                      key: item.key,
+                    });
+                    onClose?.();
+                  }}
+                  aria-current={active ? "page" : undefined}
+                  href={`/dashboard/${item.key}`}
+                  className="flex min-h-10 min-w-0 flex-1 items-center gap-3 px-3 text-[12px] font-semibold"
                 >
-                  <Link
-                    onClick={onClose}
-                    href={`/dashboard/${item.key}`}
-                    className="flex min-h-10 min-w-0 flex-1 items-center gap-3 px-3 text-[12px] font-semibold"
+                  <item.icon className="size-[17px] shrink-0" />
+                  {item.name}
+                  {count ? (
+                    <span className="ml-auto rounded-md bg-white px-1.5 py-0.5 text-[10px] text-slate-600">
+                      {count}
+                    </span>
+                  ) : null}
+                </Link>
+                {item.key !== "notifications" &&
+                (data?.module_unread[item.key] ?? 0) > 0 ? (
+                  <span
+                    className="size-1.5 shrink-0 rounded-full bg-blue-600"
+                    title={`${data?.module_unread[item.key]} unread updates`}
+                    aria-label={`${data?.module_unread[item.key]} unread updates`}
+                  />
+                ) : null}
+                {item.sub ? (
+                  <button
+                    className="min-h-10 px-2"
+                    aria-label={`Expand ${item.name}`}
+                    aria-expanded={open}
+                    onClick={() =>
+                      setExpansion({
+                        path: navigationKey,
+                        key: open ? null : item.key,
+                      })
+                    }
                   >
-                    <item.icon className="size-[17px] shrink-0" />
-                    {item.name}
-                    {item.key === "ai-tools" ? (
-                      <span className="rounded bg-teal-50 px-1.5 py-0.5 text-[8px] text-teal-700">
-                        NEW
-                      </span>
-                    ) : count ? (
-                      <span className="ml-auto rounded-md bg-white px-1.5 py-0.5 text-[10px] text-slate-600">
-                        {count}
-                      </span>
-                    ) : null}
-                  </Link>
-                  {item.key !== "notifications" &&
-                  (data?.module_unread[item.key] ?? 0) > 0 ? (
-                    <span
-                      className="size-1.5 shrink-0 rounded-full bg-blue-600"
-                      title={`${data?.module_unread[item.key]} unread updates`}
-                      aria-label={`${data?.module_unread[item.key]} unread updates`}
-                    />
-                  ) : null}
-                  {item.sub ? (
-                    <button
-                      className="min-h-10 px-2"
-                      aria-label={`Expand ${item.name}`}
-                      aria-expanded={open}
-                      onClick={() => setExpanded(open ? null : item.key)}
-                    >
-                      {open ? (
-                        <ChevronDown className="size-3" />
-                      ) : (
-                        <ChevronRight className="size-3" />
-                      )}
-                    </button>
-                  ) : null}
-                </div>
-                {open && item.sub ? (
-                  <div className="ml-5 mt-1 border-l border-slate-100 pl-5">
-                    {item.sub.map((sub, i) => (
-                      <Link
-                        onClick={onClose}
-                        className="block rounded py-2 text-[11px] text-slate-500 hover:text-blue-700"
-                        key={sub}
-                        href={`/dashboard/${item.key}?view=${item.values?.[i] ?? ""}${item.key === "ai-tools" ? `#${item.values?.[i]}` : ""}`}
-                      >
-                        {sub}
-                      </Link>
-                    ))}
-                  </div>
+                    {open ? (
+                      <ChevronDown className="size-3" />
+                    ) : (
+                      <ChevronRight className="size-3" />
+                    )}
+                  </button>
                 ) : null}
               </div>
-            );
-          },
-        )}
+              {open && item.sub ? (
+                <div className="ml-5 mt-1 border-l border-slate-100 pl-5">
+                  {item.sub.map((sub, i) => (
+                    <Link
+                      onClick={onClose}
+                      aria-current={
+                        active &&
+                        (search.get("view") || "") === item.values?.[i]
+                          ? "page"
+                          : undefined
+                      }
+                      className={`block rounded py-2 text-[11px] hover:text-blue-700 ${active && (search.get("view") || "") === item.values?.[i] ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-500"}`}
+                      key={sub}
+                      href={`/dashboard/${item.key}?view=${item.values?.[i] ?? ""}${item.key === "ai-tools" ? `#${item.values?.[i]}` : ""}`}
+                    >
+                      {sub}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </nav>
       <div className="mt-5 border-t border-slate-100 pt-3">
         {data?.profile.primary_role === "student" ? (
@@ -332,6 +397,7 @@ function Sidebar({
           </Link>
         ) : null}
         <AccountMenu
+          onNavigate={onClose}
           name={data?.profile.full_name || name}
           initials={initials}
         />
@@ -342,12 +408,13 @@ function Sidebar({
 function ContextPanel() {
   const { data } = useWorkspace();
   if (!data) return null;
+  if (data.pending?.length) return <aside role="status" aria-busy="true" className="sw-card">Loading workspace context…</aside>;
   if (data.profile.primary_role !== "student") return <RoleContext />;
   const now = new Date(),
     today = now.toDateString();
   const schedule = [
-    ...data.events.filter((e) => e.status !== "cancelled"),
-    ...data.sessions,
+    ...data.events.filter((e) => e.registered && e.status !== "cancelled"),
+    ...data.sessions.filter((s) => s.status !== "cancelled"),
     ...data.applications
       .filter((a) => a.interview_at)
       .map((a) => ({ ...a, starts_at: a.interview_at })),
@@ -509,7 +576,7 @@ function ContextPanel() {
     </aside>
   );
 }
-export function StudentWorkspaceFrame({
+function WorkspaceFrame({
   children,
   user,
 }: {
@@ -517,7 +584,7 @@ export function StudentWorkspaceFrame({
   user: { name: string; initials: string };
 }) {
   const dialog = useRef<HTMLDialogElement>(null),
-    { data, mutate } = useWorkspace();
+    { data, mutate, loadNotifications } = useWorkspace();
   const [noticeError, setNoticeError] = useState("");
   return (
     <div className="student-workspace">
@@ -548,63 +615,59 @@ export function StudentWorkspaceFrame({
             </span>
           </div>
           <div className="flex items-center gap-4">
-            <details className="relative">
-              <summary
-                aria-label={`${data?.counts.notifications ?? 0} unread notifications`}
-                className="relative grid size-10 cursor-pointer list-none place-items-center rounded-full hover:bg-slate-50"
-              >
-                <Bell className="size-[18px] text-slate-500" />
-                {data?.counts.notifications ? (
-                  <span className="absolute right-0 top-0 rounded-full bg-blue-600 px-1.5 text-[10px] text-white">
-                    {data.counts.notifications}
-                  </span>
-                ) : null}
-              </summary>
-              <div className="absolute right-0 mt-3 w-[min(320px,85vw)] rounded-2xl border border-slate-200 bg-white p-4 shadow-lg">
-                <h2 className="font-semibold">Notifications</h2>
-                {noticeError ? <p role="alert">{noticeError}</p> : null}
-                {data?.notifications.slice(0, 4).map((n) => (
-                  <Link
-                    key={n.id}
-                    href={n.action_url}
-                    onClick={() =>
-                      void mutate(() => workspaceApi.read(n.id)).catch((e) =>
-                        setNoticeError(e.message),
-                      )
-                    }
-                    className="mt-3 block border-b border-slate-100 pb-3 text-xs"
-                  >
-                    <span
-                      className={
-                        !n.read_at ? "font-semibold" : "text-slate-500"
-                      }
-                    >
-                      {n.title}
+            <WorkspacePopover
+              compact
+              onOpen={() => {
+                if (data?.notification_details_loaded === false)
+                  void loadNotifications?.().catch((e) => setNoticeError(e.message));
+              }}
+              label={data?.pending?.includes("notifications") ? "Loading notifications" : `${data?.counts.notifications ?? 0} unread notifications`}
+              trigger={
+                <>
+                  <Bell className="size-[18px] text-slate-500" />
+                  {data?.counts.notifications ? (
+                    <span className="absolute right-0 top-0 rounded-full bg-blue-600 px-1.5 text-[10px] text-white">
+                      {data.counts.notifications}
                     </span>
-                  </Link>
-                ))}
-                {!data?.notifications.length ? (
-                  <p className="sw-muted mt-3">You’re all caught up.</p>
-                ) : null}
-                <Link
-                  href="/dashboard/notifications"
-                  className="mt-3 block text-xs font-semibold text-blue-700"
-                >
-                  View all notifications →
-                </Link>
-              </div>
-            </details>
-            <Link
-              href="/dashboard/profile"
-              className="flex items-center gap-2 text-xs font-semibold"
+                  ) : null}
+                </>
+              }
             >
-              <span className="grid size-8 place-items-center rounded-full bg-slate-900 text-[10px] text-white">
-                {user.initials}
-              </span>
-              <span className="hidden sm:inline">
-                {data?.profile.full_name || user.name}
-              </span>
-            </Link>
+              <h2 className="font-semibold">Notifications</h2>
+              {noticeError ? <p role="alert">{noticeError}</p> : null}
+              {data?.notifications.slice(0, 4).map((n) => (
+                <Link
+                  key={n.id}
+                  href={n.action_url}
+                  onClick={() =>
+                    void mutate(() => workspaceApi.read(n.id), "notifications").catch((e) =>
+                      setNoticeError(e.message),
+                    )
+                  }
+                  className="mt-3 block border-b border-slate-100 pb-3 text-xs"
+                >
+                  <span
+                    className={!n.read_at ? "font-semibold" : "text-slate-500"}
+                  >
+                    {n.title}
+                  </span>
+                </Link>
+              ))}
+              {data?.pending?.includes("notifications") || data?.notification_details_loaded === false ? <p role="status">Loading notifications…</p> : !data?.notifications.length ? (
+                <p className="sw-muted mt-3">You’re all caught up.</p>
+              ) : null}
+              <Link
+                href="/dashboard/notifications"
+                className="mt-3 block text-xs font-semibold text-blue-700"
+              >
+                View all notifications →
+              </Link>
+            </WorkspacePopover>
+            <AccountMenu
+              header
+              name={data?.profile.full_name || user.name}
+              initials={user.initials}
+            />
           </div>
         </header>
         <div className="sw-grid">
@@ -617,13 +680,45 @@ export function StudentWorkspaceFrame({
     </div>
   );
 }
-export function StudentShell(props: {
+export function StudentWorkspaceFrame(props: {
   children: React.ReactNode;
   user: { name: string; initials: string };
 }) {
   return (
-    <WorkspaceProvider>
+    <WorkspacePopovers>
+      <WorkspaceFrame {...props} />
+    </WorkspacePopovers>
+  );
+}
+export function StudentShell(props: {
+  children: React.ReactNode;
+  user: { name: string; initials: string };
+  identity: string;
+  role?: string;
+}) {
+  const router = useRouter();
+  const [sessionChanged, setSessionChanged] = useState(false);
+  useEffect(() => {
+    const { data: { subscription } } = createSupabaseBrowserClient().auth.onAuthStateChange(
+      (event, session) => {
+        if (!session || session.user.id !== props.identity) {
+          // Unmount private state before reconciling a sign-out/account switch.
+          setSessionChanged(true);
+          router.refresh();
+        } else if (event === "USER_UPDATED") {
+          // The server rechecks role/account state; browser metadata is not trusted.
+          router.refresh();
+        }
+      },
+    );
+    return () => subscription.unsubscribe();
+  }, [props.identity, router]);
+  if (sessionChanged) return <p role="status">Updating your session…</p>;
+  return (
+    <VerifiedShellRole.Provider value={props.role || null}>
+    <WorkspaceProvider progressive={props.role === "student"} compactNotifications={!!props.role}>
       <StudentWorkspaceFrame {...props} />
     </WorkspaceProvider>
+    </VerifiedShellRole.Provider>
   );
 }

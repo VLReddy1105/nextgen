@@ -10,6 +10,26 @@ export async function api<T>(
   body?: unknown,
 ): Promise<T> {
   const scenario = new URLSearchParams(location.search).get("scenario");
+  if (method !== "GET" && scenario === "functional") {
+    if (path === "/support/reports") {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      if (new URLSearchParams(location.search).has("fail"))
+        throw Error("Report could not be saved. Try again.");
+      const report = body as { category: string; message: string };
+      const student =
+        new URLSearchParams(location.search).get("role") === "student";
+      if (
+        report.category !== (student ? "opportunity" : "problem") ||
+        !report.message.startsWith(
+          student ? "[Suspicious Opportunity]" : "[Privacy]",
+        ) ||
+        "user_id" in report
+      )
+        throw Error("Incorrect report category mapping");
+      return { id: "local-report" } as T;
+    }
+    throw Error("Unsupported functional fixture write");
+  }
   if (scenario === "failure" && ["/connections", "/campus"].includes(path))
     throw Error("Controlled connection read failed");
   if (method !== "GET" && scenario === "affiliations") {

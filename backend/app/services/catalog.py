@@ -139,7 +139,10 @@ async def catalog(current, kind, profile=None):
 
 
 async def applications(current):
-    records, opportunity_rows, organization_rows = await gather(
+    async def applicant_names():
+        return await current.repo.rpc("eco_applicants", {}) if current.role != "student" else []
+
+    records, opportunity_rows, organization_rows, name_rows = await gather(
         current.repo.rows(
             "applications",
             **({"student_id": f"eq.{current.id}"} if current.role == "student" else {}),
@@ -147,15 +150,9 @@ async def applications(current):
         ),
         current.repo.rows("opportunities"),
         current.repo.rows("organizations"),
+        applicant_names(),
     )
-    names = (
-        {
-            r["application_id"]: r["full_name"]
-            for r in await current.repo.rpc("eco_applicants", {})
-        }
-        if current.role != "student"
-        else {}
-    )
+    names = {r["application_id"]: r["full_name"] for r in name_rows}
     opportunities = {r["id"]: r for r in opportunity_rows}
     organizations = {
         r["id"]: r["name"] for r in organization_rows

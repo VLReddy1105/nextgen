@@ -135,7 +135,9 @@ export function MentorRecruitment() {
       </p>
       {!isMentor && organizations.length > 0 && (
         <details className="sw-card mt-5">
-          <summary>Publish a Mentor requirement</summary>
+          <summary className="sw-button w-fit cursor-pointer">
+            Publish a Mentor requirement
+          </summary>
           <OpeningEditor organizations={organizations} />
         </details>
       )}
@@ -199,7 +201,13 @@ export function MentorRecruitment() {
         ))}
       </div>
       {!openings.length && (
-        <p className="sw-card mt-5">No Mentor opportunities right now.</p>
+        <p className="sw-card mt-5">
+          {isMentor
+            ? "No matching Mentor opportunities right now. New openings from eligible organizations will appear here."
+            : organizations.length
+              ? "No Mentor opportunities yet. Use Publish a Mentor requirement above to create a draft or opening."
+              : "Mentor recruitment requires an eligible organization account. Your official university must be verified before recruiting."}
+        </p>
       )}
       <h2 className="sw-section mt-8">
         {isMentor ? "My applications" : "Mentor applications"}

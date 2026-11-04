@@ -12,7 +12,7 @@ import {
   Check,
   Search,
 } from "lucide-react";
-import { useWorkspace } from "./WorkspaceProvider";
+import { useWorkspace, WorkspaceSection, type RefreshScope } from "./WorkspaceProvider";
 import { StudentActivity } from "./StudentActivity";
 import { CreateSpace } from "./CreateSpace";
 import { workspaceApi } from "@/lib/api/workspace";
@@ -50,10 +50,12 @@ export function Action({
   run,
   children,
   secondary = false,
+  refreshScope,
 }: {
   run: () => Promise<unknown>;
   children: React.ReactNode;
   secondary?: boolean;
+  refreshScope?: RefreshScope;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -68,10 +70,10 @@ export function Action({
           setBusy(true);
           setError("");
           try {
-            if (refreshDetail) {
+            if (refreshDetail && !refreshScope) {
               await run();
               await refreshDetail();
-            } else await mutate(run);
+            } else await mutate(run, refreshScope);
           } catch (e) {
             setError(e instanceof Error ? e.message : "Action failed.");
           } finally {
@@ -723,8 +725,8 @@ export function StudentOverview() {
             ))}
         </div>
       </section>
-      <Invitations />
-      <section className="sw-card mt-5">
+      <WorkspaceSection needs={["invitations", "projects", "communities"]}><Invitations /></WorkspaceSection>
+      <WorkspaceSection needs={["mentors", "sessions"]}><section className="sw-card mt-5">
         <h2 className="sw-section">Mentorship activity</h2>
         <p className="sw-muted mt-3">
           {
@@ -745,8 +747,8 @@ export function StudentOverview() {
         >
           View mentoring relationships →
         </Link>
-      </section>
-      <section className="mt-8">
+      </section></WorkspaceSection>
+      <WorkspaceSection needs={["opportunities", "projects", "communities", "mentors", "events"]}><section className="mt-8">
         <div className="mb-4 flex justify-between">
           <h2 className="sw-section">Recommended for you</h2>
           <Link
@@ -770,8 +772,8 @@ export function StudentOverview() {
             action="Add your skills"
           />
         )}
-      </section>
-      <section className="mt-8">
+      </section></WorkspaceSection>
+      <WorkspaceSection needs={["applications"]}><section className="mt-8">
         <h2 className="sw-section mb-4">Your Applications</h2>
         {data.applications.length ? (
           data.applications.slice(0, 3).map((a) => (
@@ -794,8 +796,8 @@ export function StudentOverview() {
             href="/dashboard/opportunities"
           />
         )}
-      </section>
-      <section className="mt-8">
+      </section></WorkspaceSection>
+      <WorkspaceSection needs={["projects"]}><section className="mt-8">
         <h2 className="sw-section mb-4">Recent Projects</h2>
         {data.projects.some((p) => p.joined) ? (
           data.projects
@@ -810,8 +812,8 @@ export function StudentOverview() {
             action="Explore projects"
           />
         )}
-      </section>
-      <section className="mt-8">
+      </section></WorkspaceSection>
+      <WorkspaceSection needs={["applications", "projects", "events", "communities"]}><section className="mt-8">
         <h2 className="sw-section mb-4">Your activity</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {["applications", "projects", "events", "communities"].map((k) => (
@@ -821,7 +823,7 @@ export function StudentOverview() {
             </Link>
           ))}
         </div>
-      </section>
+      </section></WorkspaceSection>
       <section className="sw-card mt-6">
         <h2 className="sw-section">Continue your journey</h2>
         <div className="mt-4 flex flex-wrap gap-3">

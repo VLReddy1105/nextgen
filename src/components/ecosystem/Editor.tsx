@@ -40,6 +40,7 @@ export function Editor({
   return (
     <form
       className="sw-card mt-5"
+      onChange={() => setSaved(false)}
       onSubmit={async (e) => {
         e.preventDefault();
         setBusy(true);

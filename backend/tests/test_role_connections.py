@@ -7,6 +7,38 @@ from app.api.routes import events, opportunities
 from app.schemas.ecosystem import SessionCreate
 
 
+@pytest.mark.parametrize("verified", [True, False])
+def test_university_workspace_uses_campus_not_first_owned_organization(monkeypatch, verified):
+    from app.api.routes import workspace
+
+    async def empty(*args):
+        return []
+
+    monkeypatch.setattr(workspace, "catalog", empty)
+    monkeypatch.setattr(workspace, "applications", empty)
+    monkeypatch.setattr(workspace, "optional_hub", empty)
+    calls = []
+
+    class Repo:
+        async def rows(self, table, **filters):
+            if table == "organizations":
+                return [
+                    {"id": "other", "type": "community", "verified": True},
+                    {"id": "campus", "type": "university", "verified": verified},
+                ]
+            return []
+
+        async def rpc(self, name, params):
+            calls.append((name, params))
+            assert params == {"p_university": "campus"}
+            return [{"student_id": "student"}]
+
+    current = SimpleNamespace(id="owner", role="university", email="owner@example.test", profile={}, repo=Repo())
+    result = asyncio.run(workspace.role_workspace(current))
+    assert result["counts"].get("students", 0) == (1 if verified else 0)
+    assert len(calls) == (1 if verified else 0)
+
+
 def test_catalog_reflects_pending_invitation_request_and_contextual_role():
     calls = []
     class Repo:

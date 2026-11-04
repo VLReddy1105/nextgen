@@ -14,10 +14,14 @@ export function CreateSpace({
 }) {
   const router = useRouter(),
     { data } = useWorkspace();
-  const org = data?.organizations?.[0];
+  const org = data?.organizations?.find(
+    (o) =>
+      o.type === data.profile.primary_role &&
+      (o.type === "company" || (o.type === "university" && o.verified)),
+  );
   return (
     <details className="sw-card mt-5">
-      <summary className="font-semibold">
+      <summary className="sw-button w-fit cursor-pointer">
         {item ? "Edit" : "Create"}{" "}
         {kind === "projects" ? "project" : "community"}
       </summary>
