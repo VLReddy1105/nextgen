@@ -1,4 +1,5 @@
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { recordWrite } from "./refresh-plan";
 
 export class WorkspaceError extends Error {
   constructor(
@@ -22,7 +23,9 @@ export async function api<T>(
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  return response.json() as Promise<T>;
+  const result = await response.json() as T;
+  recordWrite(path, method, result);
+  return result;
 }
 
 export async function apiRequest(

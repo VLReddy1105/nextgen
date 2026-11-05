@@ -20,15 +20,27 @@ export function StudentDetail({ kind, id }: { kind: Module; id: string }) {
   const [resultKey, setResultKey] = useState("");
   const itemKey = `${kind}/${id}`;
   const search = useSearchParams(),
-    { data } = useWorkspace();
+    { data, revisions, details } = useWorkspace();
   const request = useRef<AbortController | null>(null);
+  const baseline = useRef<{ key: string; value: string } | null>(null);
+  const identity = data?.profile.id;
+  const catalogPending = data?.pending?.some((key) => [kind === "mentorship" ? "mentors" : kind, "invitations"].includes(key));
   const relevantItems = data?.[kind === "mentorship" ? "mentors" : kind];
+  const relevantState = JSON.stringify({
+    identity: data?.profile.id, role: data?.profile.primary_role,
+    item: relevantItems?.find((item) => item.id === id),
+    invitations: data?.invitations?.filter((invite) => invite.kind === kind && invite.entity_id === id),
+    revision: revisions?.[`${kind}/${id}`],
+  });
   const load = useCallback(async () => {
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
     try {
-      const next = await workspaceApi.detail(kind, id, controller.signal);
+      const next = await (details ? details.read.bind(details) : workspaceApi.detail)(kind, id, controller.signal, (core) => {
+        if (controller.signal.aborted) return;
+        setItem(core); setError(""); setResultKey(`${kind}/${id}`);
+      });
       if (controller.signal.aborted) return;
       setItem(next);
       setError("");
@@ -38,11 +50,20 @@ export function StudentDetail({ kind, id }: { kind: Module; id: string }) {
       setError(e instanceof Error ? e.message : "Could not load this item.");
       setResultKey(`${kind}/${id}`);
     }
-  }, [kind, id]);
+  }, [kind, id, details]);
   useEffect(() => {
     void load();
     return () => request.current?.abort();
-  }, [load, data?.profile, relevantItems, data?.invitations, data?.mentor_hub]);
+  }, [load, identity]);
+  useEffect(() => {
+    // The first catalog frame is supplementary to the authoritative detail read.
+    // Later changes to this entity still invalidate it; other entities do not.
+    if (catalogPending) return;
+    const key = `${identity}:${itemKey}`;
+    const previous = baseline.current;
+    baseline.current = { key, value: relevantState };
+    if (previous?.key === key && previous.value !== relevantState) void load();
+  }, [load, identity, itemKey, relevantState, catalogPending]);
   if (resultKey === itemKey && error)
     return (
       <div role="alert" className="sw-card">
@@ -67,6 +88,12 @@ export function StudentDetail({ kind, id }: { kind: Module; id: string }) {
       : kind === "communities"
         ? ["posts", "events", "projects", "resources"]
         : [];
+  if (item.detail_pending) return <section aria-busy="true">
+    <Link href={`/dashboard/${kind}`} className="text-blue-700">← Back to {kind}</Link>
+    <h1 className="sw-title mt-5">{item.title || item.name}</h1>
+    <p className="sw-card mt-5">{item.description}</p>
+    <p role="status" className="sw-muted mt-5">{kind === "projects" ? "Preparing project activity…" : "Opening this community…"}</p>
+  </section>;
   return (
     <>
       <Link

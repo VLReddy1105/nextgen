@@ -4,7 +4,9 @@ import { affiliationFixture } from "./api";
 // Component fixtures only. This harness bypasses neither application guards nor
 // Supabase identity verification; it does not render the application provider.
 import React, { useState } from "react";
-import { roleFixture } from "./api";
+import { roleFixture, api } from "./api";
+import { workspaceApi } from "../../src/lib/api/workspace";
+workspaceApi.activity = (kind, view) => api(`/space-activity/${kind}?view=${view}`);
 import { SpaceActions } from "../../src/components/ecosystem/SpaceActions";
 
 import {
@@ -185,7 +187,7 @@ const component =
     <StudentListing kind={page as Module} />
   );
 function Harness() {
-  const [, update] = useState(0);
+  const [revision, update] = useState(0);
   if (role === "mentor") {
     const connection = {
       student_id: "test-student",
@@ -324,6 +326,7 @@ function Harness() {
   return (
     <WorkspaceContext.Provider
       value={{
+        revisions: { campus: revision, connections: revision },
         data:
           search.get("state") === "error" ||
           search.get("scenario") === "failure"

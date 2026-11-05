@@ -77,19 +77,22 @@ export function StudentNotifications() {
     </>
   );
 }
-export function StudentUniversity() {
+export function StudentUniversity({ organizations }: { organizations?: { id: string; name: string; verified: boolean }[] } = {}) {
   const { data } = useWorkspace();
   const [orgs, setOrgs] = useState<
       { id: string; name: string; verified: boolean }[]
     >([]),
     [error, setError] = useState("");
   useEffect(() => {
+    if (organizations) return;
+    const controller = new AbortController();
     api<{ organizations: { id: string; name: string; verified: boolean }[] }>(
-      "/students/me/universities",
+      "/students/me/universities", "GET", undefined, { signal: controller.signal },
     )
-      .then((r) => setOrgs(r.organizations))
-      .catch((e) => setError(e.message));
-  }, []);
+      .then((r) => { if (!controller.signal.aborted) setOrgs(r.organizations); })
+      .catch((e) => { if (!controller.signal.aborted) setError(e.message); });
+    return () => controller.abort();
+  }, [organizations]);
   if (!data) return null;
   return (
     <>
@@ -108,12 +111,12 @@ export function StudentUniversity() {
         data.profile.memberships.map((m) => (
           <section className="sw-card mt-6" key={m.university_id}>
             <span className="sw-chip">
-              {orgs.find((o) => o.id === m.university_id)?.verified
+              {(organizations || orgs).find((o) => o.id === m.university_id)?.verified
                 ? "Verified university"
                 : "Active membership"}
             </span>
             <h2 className="sw-section mt-5">
-              {orgs.find((o) => o.id === m.university_id)?.name || "University"}
+              {(organizations || orgs).find((o) => o.id === m.university_id)?.name || "University"}
             </h2>
             <p className="sw-muted mt-3">
               {data.profile.degree_level} ·{" "}
@@ -305,15 +308,18 @@ export function StudentSettings() {
     [loaded, setLoaded] = useState(false),
     [error, setError] = useState("");
   useEffect(() => {
+    const controller = new AbortController();
     api<{ in_app_notifications: boolean; profile_visibility: string }>(
-      "/settings",
+      "/settings", "GET", undefined, { signal: controller.signal },
     )
       .then((r) => {
+        if (controller.signal.aborted) return;
         setEnabled(r.in_app_notifications);
         setVisibility(r.profile_visibility);
         setLoaded(true);
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => { if (!controller.signal.aborted) setError(e.message); });
+    return () => controller.abort();
   }, []);
   return (
     <>

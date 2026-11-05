@@ -11,6 +11,8 @@ import {
 import { workspaceApi } from "@/lib/api/workspace";
 import type { Workspace } from "@/lib/api/types";
 import { usePathname } from "next/navigation";
+import { writePlan } from "@/lib/api/refresh-plan";
+import { DetailReads } from "@/lib/api/detail-reads";
 
 export type RefreshScope = "workspace" | "notifications" | "none";
 
@@ -28,6 +30,8 @@ function withNotifications(data: Workspace, items: Workspace["notifications"]): 
 }
 
 interface State {
+  details?: DetailReads;
+  revisions?: Record<string, number>;
   data: Workspace | null;
   error: string;
   loading: boolean;
@@ -40,6 +44,8 @@ export function WorkspaceProvider({ children, progressive = false, compactNotifi
   const [data, setData] = useState<Workspace | null>(null),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true);
+  const [revisions, setRevisions] = useState<Record<string, number>>({});
+  const details = useMemo(() => new DetailReads(workspaceApi.detail), []);
   const mounted = useRef(false);
   const inFlight = useRef<Promise<void> | null>(null);
   const controller = useRef<AbortController | null>(null);
@@ -50,7 +56,58 @@ export function WorkspaceProvider({ children, progressive = false, compactNotifi
   const noticeController = useRef<AbortController | null>(null);
   const initialized = useRef(false);
   const notificationsRequested = useRef(false);
+  const sectionFlight = useRef<Promise<void> | null>(null);
+  const sectionKeys = useRef(new Set<string>());
+  const sectionController = useRef<AbortController | null>(null);
+  const pendingProfile = useRef<Workspace["profile"] | null>(null);
+  const sectionVersion = useRef(0);
+  const refreshSections = useCallback((keys: string[], profile?: object): Promise<void> => {
+    sectionVersion.current++;
+    if (profile) pendingProfile.current = profile as Workspace["profile"];
+    keys.forEach((key) => sectionKeys.current.add(key));
+    if (sectionFlight.current) return sectionFlight.current;
+    const run = async () => {
+      // Let an existing bootstrap finish; revision invalidation prevents it
+      // overwriting any subsequent targeted result.
+      await inFlight.current;
+      while (mounted.current && sectionKeys.current.size) {
+        const selected = [...sectionKeys.current];
+        sectionKeys.current.clear();
+        const version = sectionVersion.current;
+        const noticeVersion = noticeRevision.current;
+        const request = new AbortController();
+        sectionController.current = request;
+        const next = await workspaceApi.sections(selected, notificationsRequested.current, request.signal);
+        if (!mounted.current || request.signal.aborted) return;
+        if (version !== sectionVersion.current) {
+          selected.forEach((key) => sectionKeys.current.add(key));
+          continue;
+        }
+        const profile = pendingProfile.current;
+        setData((previous) => {
+          if (!previous) return previous;
+          const merged = {
+          ...previous, ...next,
+          profile: profile || next.profile || previous.profile,
+          counts: { ...previous.counts, ...next.counts },
+          module_unread: { ...previous.module_unread, ...next.module_unread },
+          pending: previous.pending?.filter((key) => !next.ready.includes(key)),
+          };
+          return noticeVersion !== noticeRevision.current
+            ? withNotifications(merged, previous.notifications) : merged;
+        });
+      }
+      pendingProfile.current = null;
+    };
+    sectionFlight.current = run().finally(() => {
+      sectionFlight.current = null;
+      sectionController.current = null;
+      pendingProfile.current = null;
+    });
+    return sectionFlight.current;
+  }, []);
   const refresh = useCallback((): Promise<void> => {
+    if (sectionFlight.current) return sectionFlight.current;
     if (inFlight.current) return inFlight.current;
     const run = async () => {
       // A write during a read requires a follow-up read, never an overlapping one.
@@ -79,6 +136,7 @@ export function WorkspaceProvider({ children, progressive = false, compactNotifi
             setData((previous) => previous && noticeVersion !== noticeRevision.current
               ? withNotifications(next, previous.notifications) : next);
             setError("");
+            if (initialized.current) setRevisions((previous) => ({ ...previous, workspace: (previous.workspace || 0) + 1 }));
             initialized.current = true;
           }
         } catch (e) {
@@ -163,27 +221,41 @@ export function WorkspaceProvider({ children, progressive = false, compactNotifi
         if (!mounted.current) {
           controller.current?.abort();
           noticeController.current?.abort();
+          sectionController.current?.abort();
+          details.clear();
         }
       });
     };
-  }, [refresh]);
+  }, [refresh, details]);
   const mutate = useCallback(
     async (operation: () => Promise<unknown>, scope: RefreshScope = "workspace") => {
-      await operation();
+      const result = await operation();
+      details.clear();
       if (!mounted.current || scope === "none") return;
       if (scope === "notifications") {
         noticeRevision.current++;
         await refreshNotifications();
         return;
       }
+      const plan = writePlan(result);
+      if (plan) {
+        await refreshSections(plan.sections, plan.profile);
+        if (mounted.current) setRevisions((previous) => {
+          const next = { ...previous };
+          for (const key of [...plan.sections, ...(plan.entity ? [plan.entity] : [])]) next[key] = (next[key] || 0) + 1;
+          return next;
+        });
+        return;
+      }
       revision.current++;
+      if (sectionFlight.current) await sectionFlight.current;
       if (mounted.current) await refresh();
     },
-    [refresh, refreshNotifications],
+    [refresh, refreshNotifications, refreshSections, details],
   );
   const value = useMemo(
-    () => ({ data, error, loading, refresh, mutate, loadNotifications: refreshNotifications }),
-    [data, error, loading, refresh, mutate, refreshNotifications],
+    () => ({ data, error, loading, refresh, mutate, revisions, details, loadNotifications: refreshNotifications }),
+    [data, error, loading, refresh, mutate, revisions, details, refreshNotifications],
   );
   return (
     <WorkspaceContext.Provider value={value}>
@@ -204,8 +276,15 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
   const detailRoute = pathname.split("/").filter(Boolean).length === 3 &&
     ["projects", "communities", "opportunities", "events", "applications", "mentorship"].includes(routeModule);
   // Detail endpoints authorize and load their own item; catalogs are secondary.
-  const required = detailRoute ? [] : routeModule === "mentorship" ? ["mentors", "sessions"]
-    : routeModule === "projects" || routeModule === "communities" ? [routeModule, "invitations"]
+  const role = data?.profile.primary_role;
+  const required = detailRoute ? []
+    : routeModule === "mentorship" ? ["mentors", "sessions"]
+    : ["mentors", "mentor-opportunities"].includes(routeModule) ? ["mentor_hub"]
+    : role === "mentor" && ["overview", "profile", "requests", "students", "connections"].includes(routeModule) ? ["mentor"]
+    : role === "mentor" && routeModule === "sessions" ? ["mentor", "sessions"]
+    : routeModule === "talent" ? ["applications"]
+    : role === "founder" && routeModule === "connections" ? ["projects", "communities"]
+    : role !== "student" && ["opportunities", "events"].includes(routeModule) ? [routeModule, "organizations"]
     : [routeModule];
   const pending = data?.pending?.some((key) => required.includes(key));
   if (loading || (pending && !error))

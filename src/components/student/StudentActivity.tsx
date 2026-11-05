@@ -13,25 +13,27 @@ export function StudentActivity({
   kind: "projects" | "communities";
   view: string;
 }) {
-  const { data } = useWorkspace();
+  const { data, revisions } = useWorkspace();
   const spaces = data?.[kind];
+  const identity = data?.profile.id;
+  const signature = JSON.stringify(spaces?.filter((i) => i.joined).map((i) => [i.id, i.my_role, i.tasks]));
+  const revision = revisions?.[kind];
+  const viewKey = `${identity}:${kind}:${view}`;
+  const [loadedKey, setLoadedKey] = useState("");
   const request = useRef<AbortController | null>(null);
   const [items, setItems] = useState<Item[]>([]),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
   const load = useCallback(async () => {
-    if (!spaces) return;
+    if (!identity) return;
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
     try {
-      const next = await Promise.all(
-          spaces
-            .filter((i) => i.joined)
-            .map((i) => workspaceApi.detail(kind, i.id, controller.signal)),
-      );
+      const next = await workspaceApi.activity(kind, view, controller.signal);
       if (controller.signal.aborted) return;
-      setItems(next);
+      setItems(next.items);
+      setLoadedKey(viewKey);
       setError("");
     } catch (e) {
       if (controller.signal.aborted) return;
@@ -39,11 +41,11 @@ export function StudentActivity({
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [spaces, kind]);
+  }, [identity, kind, view, viewKey]);
   useEffect(() => {
     void load();
     return () => request.current?.abort();
-  }, [load]);
+  }, [load, signature, revision]);
   const title =
     view === "tasks"
       ? "My Tasks"
@@ -70,7 +72,7 @@ export function StudentActivity({
       <p className="sw-muted my-5">
         Connected to the projects and communities you belong to.
       </p>
-      {loading ? (
+      {loading || (!error && loadedKey !== viewKey) ? (
         <div
           aria-busy="true"
           className="h-48 animate-pulse rounded-xl bg-slate-100"

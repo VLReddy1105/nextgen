@@ -22,7 +22,7 @@ async def listing(current: Student):
 
 @router.get("/{id}")
 async def detail(id: UUID, current: Student):
-    rows = await catalog(current, "mentorship")
+    rows = await catalog(current, "mentorship", mentor_id=str(id))
     for row in rows:
         if row["id"] == str(id):
             return row

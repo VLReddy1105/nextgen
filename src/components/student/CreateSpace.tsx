@@ -143,6 +143,7 @@ export function CreateSpace({
             },
           );
           router.push(`/dashboard/${kind}/${result.id}`);
+          return result;
         }}
       />
       <p className="sw-muted mt-4">

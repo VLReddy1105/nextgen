@@ -4,6 +4,7 @@ import { useWorkspace } from "@/components/student/WorkspaceProvider";
 export function Invitations({ kind }: { kind?: string }) {
   const { data } = useWorkspace();
   if (!data) return null;
+  if (data.pending?.includes("invitations")) return <p role="status" className="sw-card my-5">Checking your invitations…</p>;
   const pending = (data.invitations || []).filter(
     (i) =>
       (!kind || i.kind === kind) &&

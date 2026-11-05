@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
-import { MentorContextBadge } from "./MentorAffiliations";
-import { useWorkspace } from "@/components/student/WorkspaceProvider";
+import { MentorContextBadge } from "./MentorContextBadge";
+import { useWorkspace, WorkspaceSection } from "@/components/student/WorkspaceProvider";
 import { Invitations } from "./Invitations";
 
 export function MentorOverview() {
@@ -36,7 +36,7 @@ export function MentorOverview() {
           </Link>
         </section>
       )}
-      <div className="my-6 grid gap-4 sm:grid-cols-3">
+      <WorkspaceSection needs={["sessions"]}><div className="my-6 grid gap-4 sm:grid-cols-3">
         {[
           ["Requests", "requests", data.counts.requests || 0],
           ["Active mentees", "students", data.counts.connections || 0],
@@ -47,7 +47,7 @@ export function MentorOverview() {
             <p className="mt-2 text-3xl font-semibold">{count}</p>
           </Link>
         ))}
-      </div>
+      </div></WorkspaceSection>
       <Invitations />
       <section className="sw-card mt-5">
         <h2 className="sw-section">Students matching your expertise</h2>
@@ -73,7 +73,7 @@ export function MentorOverview() {
           </p>
         )}
       </section>
-      <section className="sw-card mt-5">
+      <WorkspaceSection needs={["projects"]}><section className="sw-card mt-5">
         <h2 className="sw-section">Your projects</h2>
         {data.projects
           .filter((p) => p.joined)
@@ -93,7 +93,7 @@ export function MentorOverview() {
         <Link className="sw-button mt-4" href="/dashboard/projects">
           Explore eligible projects
         </Link>
-      </section>
+      </section></WorkspaceSection>
     </>
   );
 }

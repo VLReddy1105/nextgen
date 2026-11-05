@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from app.api.dependencies import Student, Current
 from app.schemas.actions import Toggle
 from app.services.catalog import catalog, one
+from app.services.concurrency import gather
 
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
 
@@ -17,16 +18,12 @@ async def listing(current: Student):
 async def detail(id: UUID, current: Current):
     record = await one(current.repo, "events", id)
     record["can_manage"] = record["organizer_id"] == current.id
-    record["member_count"] = (
-        len(await current.repo.rows("event_registrations", event_id=f"eq.{id}"))
-        if record["organizer_id"] == current.id
-        else None
-    )
-    record["registered"] = bool(
-        await current.repo.rows(
-            "event_registrations", user_id=f"eq.{current.id}", event_id=f"eq.{id}"
-        )
-    )
+    operations = [current.repo.rows("event_registrations", user_id=f"eq.{current.id}", event_id=f"eq.{id}")]
+    if record["can_manage"]:
+        operations.append(current.repo.rows("event_registrations", event_id=f"eq.{id}"))
+    results = await gather(*operations)
+    record["member_count"] = len(results[1]) if record["can_manage"] else None
+    record["registered"] = bool(results[0])
     return record
 
 

@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import Link from "@/components/student/DetailLink";
 import { useState } from "react";
 import { useWorkspace } from "@/components/student/WorkspaceProvider";
 import { Empty } from "@/components/student/StudentModules";

@@ -9,6 +9,11 @@ export async function api<T>(
   method = "GET",
   body?: unknown,
 ): Promise<T> {
+  if (path.startsWith("/campus?")) path = "/campus";
+  if (path.startsWith("/space-activity/")) {
+    document.documentElement.dataset.activityCalls = String(Number(document.documentElement.dataset.activityCalls || 0) + 1);
+    return { items: [] } as T;
+  }
   const scenario = new URLSearchParams(location.search).get("scenario");
   if (method !== "GET" && scenario === "functional") {
     if (path === "/support/reports") {

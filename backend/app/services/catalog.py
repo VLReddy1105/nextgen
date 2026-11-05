@@ -15,14 +15,14 @@ async def one(repo, table, id):
     return records[0]
 
 
-async def catalog(current, kind, profile=None):
+async def catalog(current, kind, profile=None, mentor_id=None):
     profile = profile if profile is not None else await student_core(current)
     repo = current.repo
     if kind == "mentorship":
         records, directory, connections = await gather(
-            repo.rows("mentor_profiles"),
+            repo.rows("mentor_profiles", **({"user_id": f"eq.{mentor_id}"} if mentor_id else {})),
             repo.rpc("workspace_directory", {"p_kind": "mentors"}),
-            repo.rows("mentor_connections", student_id=f"eq.{current.id}"),
+            repo.rows("mentor_connections", student_id=f"eq.{current.id}", **({"mentor_id": f"eq.{mentor_id}"} if mentor_id else {})),
         )
         names = {v["user_id"]: v for v in directory}
         records = [

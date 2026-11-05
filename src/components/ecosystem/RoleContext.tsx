@@ -8,6 +8,8 @@ export function RoleContext() {
   const pathname = usePathname();
   if (!data) return null;
   const role = data.profile.primary_role;
+  const needs = role === "mentor" ? ["mentor", "sessions"] : role === "company" ? ["applications", "events"] : role === "university" ? ["campus_progress", "events"] : ["projects", "communities", "events"];
+  if (data.pending?.some((key) => needs.includes(key))) return <aside role="status" className="sw-card">Preparing your next steps…</aside>;
   const next =
     role === "company"
       ? ["Review applicants", "applications"]
@@ -144,7 +146,7 @@ export function RoleContext() {
             {!n.read_at ? " · Unread" : ""}
           </Link>
         ))}
-        {!data.notifications.length && (
+        {data.notification_details_loaded === false ? <Link className="sw-button mt-3" href="/dashboard/notifications">View your updates</Link> : !data.notifications.length && (
           <p className="sw-muted mt-3">
             Responses and activity from your relationships will appear here.
           </p>

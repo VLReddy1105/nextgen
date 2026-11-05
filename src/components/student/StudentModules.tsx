@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import Link from "./DetailLink";
 import { api } from "@/lib/api/client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useContext, useEffect, useState } from "react";
@@ -579,18 +579,26 @@ export function StudentListing({ kind }: { kind: Module }) {
   );
 }
 function MentorConnections() {
-  const { data } = useWorkspace();
+  const { data, revisions } = useWorkspace();
   const [items, setItems] = useState<
     { mentor_id: string; full_name: string; status: string }[]
   >([]);
   const [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [attempt, retry] = useState(0);
+  const signature = JSON.stringify([data?.profile.id, data?.mentors.map((m) => [m.id, m.connection_status]), revisions?.connections]);
+  const sharedConnections = data?.connections;
   useEffect(() => {
+    if (sharedConnections) {
+      setItems(sharedConnections);
+      setLoading(false);
+      setError("");
+      return;
+    }
     let active = true;
-    setLoading(true);
+    const controller = new AbortController();
     setError("");
-    void api<{ items: typeof items }>("/connections")
+    void api<{ items: typeof items }>("/connections", "GET", undefined, { signal: controller.signal })
       .then((r) => {
         if (active) setItems(r.items);
       })
@@ -602,8 +610,9 @@ function MentorConnections() {
       });
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [data, attempt]);
+  }, [signature, attempt, sharedConnections]);
   return (
     <>
       <h1 className="sw-title">My Mentors</h1>
@@ -611,7 +620,7 @@ function MentorConnections() {
         Track requested, accepted, and declined mentorship relationships.
       </p>
       {loading ? (
-        <p aria-busy="true">Loading connections…</p>
+        <p aria-busy="true">Updating your mentor connections…</p>
       ) : error ? (
         <div role="alert">
           {error}

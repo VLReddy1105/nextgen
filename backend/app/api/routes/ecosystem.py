@@ -33,7 +33,7 @@ async def invite_student(id: UUID, body: SpaceInvite, current: Current):
 
 
 @router.get("/campus")
-async def campus(current: Current):
+async def campus(current: Current, include_progress: bool = True):
     orgs, domains, requests, request_rows, invitations, announcements = await gather(
         current.repo.rows("organizations"),
         current.repo.rows("university_domains"),
@@ -68,7 +68,7 @@ async def campus(current: Current):
             await current.repo.rpc(
                 "eco_campus_progress", {"p_university": own[0]["id"]}
             )
-            if own and own[0]["verified"]
+            if include_progress and own and own[0]["verified"]
             else []
         ),
     }

@@ -20,5 +20,31 @@ try {
   await click("Sign out fixture");
   await page.getByText("Updating your session…").waitFor();
   assert.equal(await page.getByText("Private two", { exact: true }).count(), 0);
+  await page.goto("http://127.0.0.1:4173/session.html");
+  await click("Resolve accounts");
+  await page.getByRole("main").getByText("Private one", { exact: true }).waitFor();
+  let held;
+  let posts = 0;
+  let received;
+  const posted = new Promise(resolve => { received = resolve; });
+  const cleared = page.waitForEvent("console", { predicate: message => message.text() === "SIGNOUT_PRIVATE_CLEARED", timeout: 10000 });
+  await page.evaluate(() => {
+    new MutationObserver(() => {
+      if (document.body.textContent.includes("Signing you out…") && !document.body.textContent.includes("Private one"))
+        console.info("SIGNOUT_PRIVATE_CLEARED");
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
+  await page.route("**/auth/signout", route => {
+    assert.equal(route.request().method(), "POST");
+    posts++;
+    held = route;
+    received();
+  });
+  await click("Account menu");
+  await page.getByRole("button", { name: "Logout", exact: true }).click({ noWaitAfter: true });
+  await cleared;
+  await posted;
+  assert.equal(posts, 1, "Native sign-out submits once and is not replaced by client navigation");
+  await held.fulfill({ status: 200, contentType: "text/html", body: "<p>Signed out fixture</p>" });
   console.log("PASS: account switch/sign-out immediately unmount private state; late old responses cannot cross accounts");
 } finally { await browser.close(); }
