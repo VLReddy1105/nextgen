@@ -15,8 +15,19 @@ import { StudentNotifications } from "../../src/components/student/StudentExtras
 import { StudentDetail } from "../../src/components/student/StudentDetail";
 import type { Workspace, Module } from "../../src/lib/api/types";
 import "./style.css";
+import { recordWrite } from "../../src/lib/api/refresh-plan";
 
 let calls = 0;
+let sectionCalls = 0;
+const sections: (() => void)[] = [];
+workspaceApi.sections = async (keys) => {
+  const version = ++sectionCalls;
+  document.documentElement.dataset.sectionCalls = String(sectionCalls);
+  return new Promise(resolve => sections.push(() => resolve({
+    ready: keys, projects: [{ id: "p", title: `Section ${version}` }],
+    notifications: fixture(0).notifications, counts: { notifications: 1 }, module_unread: { projects: 1 },
+  })));
+};
 const progressive = new URLSearchParams(location.search).has("progressive");
 let receiveSection: ((value: Workspace) => void) | undefined;
 let finishStream: ((value: Workspace) => void) | undefined;
@@ -106,6 +117,13 @@ function Controls() {
       </output>
       <output data-testid="unread">{data?.counts.notifications}</output>
       <output data-testid="module-unread">{data?.module_unread.projects}</output>
+      <output data-testid="section-result">{data?.projects[0]?.title || "empty"}</output>
+      <button onClick={() => void mutate(async () => {
+        const result = { ok: true };
+        recordWrite("/spaces/projects/p/join", "POST", result);
+        return result;
+      })}>Targeted mutation</button>
+      <button onClick={() => sections.splice(0).forEach(resolve => resolve())}>Resolve sections</button>
       {progressive && <>
         {["A", "B"].map(id => <span key={id}>
           <button onClick={() => { history.replaceState(null, "", `?progressive&page=projects/${id}`); setModule(`detail${id}`); }}>Open detail {id}</button>

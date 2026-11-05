@@ -5,9 +5,53 @@ from app.api.dependencies import Student, Current
 from app.schemas.actions import Invite, TaskStatus, Post, Toggle, Resource, Space
 from app.services.catalog import catalog, one
 from app.core.errors import require
+from app.services.concurrency import gather
+from fastapi.responses import StreamingResponse
+import asyncio
+import json
 
 router = APIRouter(prefix="/api/v1", tags=["spaces"])
 Kind = Literal["projects", "communities"]
+
+
+@router.get("/space-activity/{kind}")
+async def activity(kind: Kind, current: Student, view: Literal["tasks", "team", "feed", "posts"] = "tasks"):
+    """One admission, focused reads only; memberships and entity RLS remain authoritative.
+
+    Existing directory RPCs are retained for names (never broad profile SELECT).
+    Per-space limits match the old detail endpoint, avoiding global batch truncation.
+    """
+    require((kind == "projects" and view in ("tasks", "team")) or
+            (kind == "communities" and view in ("feed", "posts")))
+    field = "project_id" if kind == "projects" else "community_id"
+    memberships = await current.repo.rows(
+        "project_members" if kind == "projects" else "community_members",
+        user_id=f"eq.{current.id}", status="eq.active",
+    )
+    if not memberships:
+        return {"items": []}
+    ids = ",".join(str(UUID(m[field])) for m in memberships)
+    spaces = await current.repo.rows(kind, id=f"in.({ids})", select="id,title" if kind == "projects" else "id,name")
+
+    async def focused(space):
+        sid = space["id"]
+        if view == "tasks":
+            return {**space, "tasks": await current.repo.rows("project_tasks", project_id=f"eq.{sid}")}
+        if view == "team":
+            return {**space, "team": await current.repo.rpc("workspace_directory", {"p_kind": kind, "p_id": sid})}
+        posts, team = await gather(
+            current.repo.rows("community_posts", community_id=f"eq.{sid}", order="created_at.desc"),
+            current.repo.rpc("workspace_directory", {"p_kind": kind, "p_id": sid}),
+        )
+        return {**space, "posts": posts, "team": team}
+
+    # Bound upstream fan-out while keeping the single client/auth request.
+    import asyncio
+    slots = asyncio.Semaphore(8)
+    async def bounded(space):
+        async with slots:
+            return await focused(space)
+    return {"items": await gather(*(bounded(space) for space in spaces))}
 
 
 @router.post("/resources/{kind}/{id}")
@@ -42,6 +86,35 @@ async def create(kind: Kind, body: Space, current: Current):
 
 @router.get("/spaces/{kind}/{id}")
 async def detail(kind: Kind, id: UUID, current: Current):
+    return await read_detail(kind, id, current)
+
+
+@router.get("/space-details/{kind}/{id}")
+async def progressive_detail(kind: Kind, id: UUID, current: Current):
+    async def stream():
+        queue = asyncio.Queue()
+        async def run():
+            try:
+                result = await read_detail(kind, id, current, lambda core: queue.put_nowait({"item": core, "complete": False}))
+                await queue.put({"item": result, "complete": True})
+            except Exception:
+                await queue.put({"error": "This item could not be loaded. Check access and retry."})
+        task = asyncio.create_task(run())
+        try:
+            while True:
+                frame = await queue.get()
+                yield json.dumps(frame) + "\n"
+                if frame.get("complete") or frame.get("error"):
+                    break
+        finally:
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+    return StreamingResponse(stream(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
+async def read_detail(kind, id, current, on_core=None):
     record = await one(current.repo, kind, id)
     record["organization_id"] = (
         record.get("organization_id")
@@ -55,19 +128,20 @@ async def detail(kind: Kind, id: UUID, current: Current):
     )
     record["joined"] = bool(memberships)
     record["my_role"] = memberships[0]["role"] if memberships else None
-    record.update(
-        await current.repo.rpc(
-            "eco_relationship_directory", {"p_kind": kind, "p_id": str(id)}
-        )
-    )
+    if on_core:
+        on_core(dict(record))
+    # Entity visibility and contextual membership are resolved before private reads.
+    operations = {"relationships": current.repo.rpc(
+        "eco_relationship_directory", {"p_kind": kind, "p_id": str(id)}
+    )}
     if kind == "projects" and record["my_role"] == "project_head":
-        record["codes"] = await current.repo.rows(
+        operations["codes"] = current.repo.rows(
             "project_invite_codes",
             project_id=f"eq.{id}",
             select="id,expires_at,revoked_at,uses,usage_limit,created_at",
         )
     if record["joined"]:
-        record["team"] = await current.repo.rpc(
+        operations["team"] = current.repo.rpc(
             "workspace_directory", {"p_kind": kind, "p_id": str(id)}
         )
         if kind == "projects":
@@ -76,33 +150,25 @@ async def detail(kind: Kind, id: UUID, current: Current):
                 ("files", "project_files"),
                 ("activity", "project_activity"),
             ]:
-                record[name] = await current.repo.rows(table, project_id=f"eq.{id}")
+                operations[name] = current.repo.rows(table, project_id=f"eq.{id}")
         else:
-            record["posts"] = await current.repo.rows(
-                "community_posts", community_id=f"eq.{id}", order="created_at.desc"
-            )
-            ids = ",".join(p["id"] for p in record["posts"])
-            record["comments"] = (
-                await current.repo.rows(
-                    "community_comments", post_id=f"in.({ids})", order="created_at.asc"
+            async def feed():
+                posts = await current.repo.rows(
+                    "community_posts", community_id=f"eq.{id}", order="created_at.desc"
                 )
-                if ids
-                else []
-            )
-            record["reactions"] = (
-                await current.repo.rows("community_reactions", post_id=f"in.({ids})")
-                if ids
-                else []
-            )
-            record["resources"] = await current.repo.rows(
-                "community_resources", community_id=f"eq.{id}"
-            )
-            record["events"] = await current.repo.rows(
-                "events", community_id=f"eq.{id}"
-            )
-            record["projects"] = await current.repo.rows(
-                "projects", community_id=f"eq.{id}"
-            )
+                ids = ",".join(p["id"] for p in posts)
+                comments, reactions = await gather(
+                    current.repo.rows("community_comments", post_id=f"in.({ids})", order="created_at.asc"),
+                    current.repo.rows("community_reactions", post_id=f"in.({ids})"),
+                ) if ids else ([], [])
+                return {"posts": posts, "comments": comments, "reactions": reactions}
+            operations["feed"] = feed()
+            for name, table in (("resources", "community_resources"), ("events", "events"), ("projects", "projects")):
+                operations[name] = current.repo.rows(table, community_id=f"eq.{id}")
+    results = dict(zip(operations, await gather(*operations.values())))
+    record.update(results.pop("relationships"))
+    record.update(results.pop("feed", {}))
+    record.update(results)
     return record
 
 

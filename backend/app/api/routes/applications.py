@@ -4,6 +4,7 @@ from app.api.dependencies import Student, Current
 from app.schemas.actions import ApplicationStatus
 from app.services.catalog import applications, one
 from app.core.errors import require
+from app.services.concurrency import gather
 
 router = APIRouter(prefix="/api/v1/applications", tags=["applications"])
 
@@ -20,14 +21,14 @@ async def detail(id: UUID, current: Current):
     posting = await one(current.repo, "opportunities", record["opportunity_id"])
     record["title"] = posting["title"]
     record["can_manage"] = posting["created_by"] == current.id
-    organization = await one(current.repo, "organizations", posting["organization_id"])
+    organization, applicant, history = await gather(
+        one(current.repo, "organizations", posting["organization_id"]),
+        current.repo.rpc("eco_applicant_summary", {"p_id": str(id)}),
+        current.repo.rows("application_history", application_id=f"eq.{id}", order="created_at.asc"),
+    )
     record["organization"] = organization["name"]
-    record["applicant"] = await current.repo.rpc(
-        "eco_applicant_summary", {"p_id": str(id)}
-    )
-    record["history"] = await current.repo.rows(
-        "application_history", application_id=f"eq.{id}", order="created_at.asc"
-    )
+    record["applicant"] = applicant
+    record["history"] = history
     return record
 
 

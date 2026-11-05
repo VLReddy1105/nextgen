@@ -3,7 +3,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 from app.api.dependencies import Current
 from app.services.students import student_core
@@ -12,8 +12,79 @@ from app.services.mentor_affiliations import optional_hub
 from app.services.catalog import catalog, applications
 from app.repositories.workspace_reads import WorkspaceReads
 from app.services.concurrency import gather
+from app.services.workspace_sections import Sections, KEYS, role_profile
+from app.core.errors import require
 
 router = APIRouter(prefix="/api/v1/workspace", tags=["workspace"])
+
+
+@router.get("/sections")
+async def workspace_sections(current: Current, keys: str = Query(..., max_length=500), full_notifications: bool = False):
+    selected = set(keys.split(","))
+    require(bool(selected) and selected <= KEYS, "Unknown workspace section.")
+    reads = WorkspaceReads(current.repo)
+    sections = Sections(replace(current, repo=reads), full_notifications)
+    try:
+        # Preserve reminder delivery on Student mutation refreshes. Notification-only
+        # actions keep their existing dedicated endpoint and do not invoke this.
+        if current.role == "student":
+            await current.repo.rpc("workspace_refresh_reminders", {})
+        frames = await gather(*(sections.frame(key) for key in sorted(selected)))
+        result = {"counts": {}, "module_unread": {}, "ready": sorted(selected)}
+        for frame in frames:
+            frame.pop("ready")
+            result["counts"].update(frame.pop("counts"))
+            result["module_unread"].update(frame.pop("module_unread"))
+            result.update(frame)
+        if current.role == "mentor" and selected & {"mentor", "projects"}:
+            mentor, projects = await gather(sections.get("mentor"), sections.get("projects"))
+            result["mentor"] = mentor_projection(current, ([mentor["profile"]], mentor["connections"]), projects)
+            result["ready"] = sorted(selected | {"mentor"})
+        return result
+    finally:
+        await sections.close()
+        await reads.close()
+
+
+def progressive_role(current, reads, full_notifications):
+    async def stream():
+        sections = Sections(current, full_notifications)
+        tasks = []
+        keys = ["organizations", "opportunities", "applications", "projects", "communities", "events",
+                "notifications", "sessions", "invitations", "activity"]
+        if current.role in ("mentor", "company", "university"):
+            keys.append("mentor_hub")
+        if current.role == "university":
+            keys.append("campus_progress")
+        if current.role == "mentor":
+            keys += ["mentor", "mentor_projects"]
+        try:
+            yield json.dumps({"profile": role_profile(current), "pending": keys,
+                              **{k: [] for k in ("opportunities", "applications", "projects", "communities", "events", "mentors", "notifications", "sessions", "invitations", "organizations", "activity")},
+                              "notification_details_loaded": full_notifications, "counts": {}, "module_unread": {}}) + "\n"
+            async def frame(key):
+                if key != "mentor_projects":
+                    return await sections.frame(key)
+                mentor, projects = await gather(sections.get("mentor"), sections.get("projects"))
+                return {"mentor": mentor_projection(current, ([mentor["profile"]], mentor["connections"]), projects),
+                        "ready": key, "counts": {}, "module_unread": {}}
+            tasks = [asyncio.create_task(frame(k)) for k in keys if k != "mentor_projects"]
+            for task in asyncio.as_completed(tasks):
+                yield json.dumps(await task) + "\n"
+            if "mentor_projects" in keys:
+                yield json.dumps(await frame("mentor_projects")) + "\n"
+        except Exception:
+            logging.getLogger(__name__).exception("Role workspace read failed")
+            yield json.dumps({"error": "Could not finish loading workspace. Please retry."}) + "\n"
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            await sections.close()
+            await reads.close()
+    return StreamingResponse(stream(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
 @router.get("/progressive")
@@ -25,9 +96,7 @@ async def progressive_workspace(current: Current, full_notifications: bool = Fal
     # read stream. Non-Student consumers retain the existing full response shape.
     try:
         if actor.role != "student":
-            result = await role_workspace(actor, full_notifications)
-            await reads.close()
-            return StreamingResponse(iter([json.dumps(result) + "\n"]), media_type="application/x-ndjson")
+            return progressive_role(actor, reads, full_notifications)
         _, profile = await gather(
             actor.repo.rpc("workspace_refresh_reminders", {}), student_core(actor)
         )
@@ -178,13 +247,14 @@ async def role_workspace(current, full_notifications=True):
     async def organization_context():
         orgs = await current.repo.rows("organizations", created_by=f"eq.{current.id}")
         extra = {}
+        progress = []
         university = next((o for o in orgs if o.get("type") == "university"), None)
         if current.role == "university" and university and university["verified"]:
             progress = await current.repo.rpc(
                 "eco_campus_progress", {"p_university": university["id"]}
             )
             extra["students"] = len(progress)
-        return orgs, extra
+        return orgs, extra, progress
 
     async def mentor_context():
         return await mentor_reads(current) if current.role == "mentor" else None
@@ -236,7 +306,7 @@ async def role_workspace(current, full_notifications=True):
         optional_hub(current),
         mentor_context(),
     )
-    orgs, extra = organization_data
+    orgs, extra, progress = organization_data
     opps = [o for o in opps if o.get("audience", "student") == "student"]
     for e in events:
         e["member_count"] = sum(r["event_id"] == e["id"] for r in registrations)
@@ -252,6 +322,7 @@ async def role_workspace(current, full_notifications=True):
         **({"mentor_hub": mentor_hub} if mentor_hub is not None else {}),
         **({"mentor": mentor} if mentor is not None else {}),
         "organizations": orgs,
+        **({"campus_progress": progress} if current.role == "university" else {}),
         "opportunities": opps,
         "projects": projects,
         "communities": communities,

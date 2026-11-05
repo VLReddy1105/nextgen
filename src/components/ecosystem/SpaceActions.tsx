@@ -227,6 +227,7 @@ export function SpaceActions({
                     v,
                   );
                   setCode(r.token);
+                  return r;
                 }}
               />
               {code && (
@@ -412,6 +413,7 @@ export function ProjectInvite() {
               );
               router.push(`/dashboard/projects/${joined.id}`);
               setPreview(null);
+              return joined;
             }}
           >
             Accept and join

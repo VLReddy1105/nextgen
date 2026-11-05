@@ -35,11 +35,19 @@ try {
   assert.equal(await page.locator("html").getAttribute("data-detail-aborted"), "true");
   await click("Resolve detail B");
   await page.getByText("Project B", { exact: true }).first().waitFor();
+  const settledCalls = await page.locator("html").getAttribute("data-detail-calls");
+  await click("Projects ready");
+  assert.equal(await page.locator("html").getAttribute("data-detail-calls"), settledCalls, "Initial supplementary catalog must not restart the active detail");
   await click("Resolve detail A");
   assert.equal(await page.getByText("Project A", { exact: true }).count(), 0, "Late A cannot replace B");
   await click("Open detail A");
   assert.equal(await page.getByText("Project B", { exact: true }).count(), 0, "Previous item is hidden while a different item loads");
   assert.equal(await page.locator("html").getAttribute("data-calls"), "1", "Detail navigation does not reload the workspace");
   assert.deepEqual(errors, []);
+  for (const [kind, view] of [["projects", "tasks"], ["projects", "team"], ["communities", "feed"], ["communities", "posts"]]) {
+    await page.goto(`http://127.0.0.1:4173/?role=student&page=${kind}&view=${view}`);
+    await page.waitForFunction(() => document.documentElement.dataset.activityCalls === "1");
+    assert.equal(await page.locator("html").getAttribute("data-activity-calls"), "1", "Activity uses one focused endpoint instead of per-space details");
+  }
   console.log("PASS progressive readiness, lazy notifications, independent detail loading, cancellation, and rapid-item isolation");
 } finally { await browser.close(); }

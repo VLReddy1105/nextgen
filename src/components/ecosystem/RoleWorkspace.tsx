@@ -1,9 +1,9 @@
 "use client";
-import Link from "next/link";
+import Link from "@/components/student/DetailLink";
 import { StatusBadge } from "./ui";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { useWorkspace } from "@/components/student/WorkspaceProvider";
+import { useWorkspace, WorkspaceSection } from "@/components/student/WorkspaceProvider";
 import { CreateSpace } from "@/components/student/CreateSpace";
 import { Publishing } from "./Publishing";
 import { roleModules, moduleLabel } from "@/lib/role-workspaces";
@@ -76,7 +76,7 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
         </div>
         <Invitations />
         {(role === "company" || role === "university") && (
-          <section className="sw-card mb-5">
+          <WorkspaceSection needs={["applications", "opportunities"]}><section className="sw-card mb-5">
             <h2 className="sw-section">Recent applicants</h2>
             <p className="sw-muted mt-2">
               {data.applications.length} applications ·{" "}
@@ -100,9 +100,9 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
                 Create or manage opportunities
               </Link>
             )}
-          </section>
+          </section></WorkspaceSection>
         )}
-        <section className="sw-card">
+        <WorkspaceSection needs={["activity"]}><section className="sw-card">
           <h2 className="sw-section">Recent activity</h2>
           {data.activity?.length ? (
             data.activity.map((a) => (
@@ -122,7 +122,7 @@ export function RoleWorkspace({ module = "overview" }: { module?: string }) {
               projects, communities, and supported role workflows.
             </p>
           )}
-        </section>
+        </section></WorkspaceSection>
       </>
     );
   const filtered = rows

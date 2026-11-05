@@ -82,6 +82,7 @@ export interface Post {
   parent_id?: string;
 }
 export interface Item {
+  detail_pending?: boolean;
   audience?: "student" | "mentor";
   affiliation_context?: "independent" | "company" | "university";
   affiliation_organization?: string;
@@ -219,6 +220,8 @@ export interface MentorConnection {
   matched_skills?: string[];
 }
 export interface Workspace {
+  campus_progress?: { student_id: string; full_name: string; program: string; year: number; study_status: string; completion: number; projects: number; events: number; applications: number }[];
+  connections?: MentorConnection[];
   pending?: string[];
   notification_details_loaded?: boolean;
   mentor_hub?: MentorHubData;

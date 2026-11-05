@@ -1,13 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api/client";
-import { useWorkspace } from "@/components/student/WorkspaceProvider";
+import { useWorkspace, WorkspaceSection } from "@/components/student/WorkspaceProvider";
 import { Action } from "@/components/student/StudentModules";
 import { StudentUniversity } from "@/components/student/StudentExtras";
 import { Editor } from "./Editor";
 type CampusData = {
-  organizations: { id: string; name: string }[];
+  organizations: { id: string; name: string; verified: boolean }[];
   domains: {
     id: string;
     domain: string;
@@ -52,18 +52,33 @@ export function Campus({
 }: {
   mode?: "students" | "student" | "announcements" | "connections";
 }) {
-  const { data } = useWorkspace();
-  const [campus, setCampus] = useState<CampusData | null>(null),
+  const { data, revisions } = useWorkspace();
+  const [loadedCampus, setCampus] = useState<CampusData | null>(null),
     [error, setError] = useState(""),
     [q, setQ] = useState(""),
     [inviteLink, setInviteLink] = useState("");
-  const load = () =>
-    api<CampusData>("/campus")
-      .then(setCampus)
-      .catch((e) => setError(e.message));
+  const request = useRef<AbortController | null>(null);
+  const sharedProgress = data?.campus_progress !== undefined || !!data?.pending?.includes("campus_progress");
+  const identity = data?.profile.id;
+  const organizationPending = data?.pending?.includes("organizations");
+  const signature = JSON.stringify([data?.profile.memberships, data?.organizations, revisions?.campus, revisions?.workspace]);
+  const load = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    try {
+      const next = await api<CampusData>(sharedProgress ? "/campus?include_progress=false" : "/campus", "GET", undefined, { signal: controller.signal });
+      if (!controller.signal.aborted) { setCampus(next); setError(""); }
+    } catch (e) {
+      if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "Could not update campus.");
+    }
+  }, [sharedProgress]);
   useEffect(() => {
+    if (organizationPending) return;
     void load();
-  }, [data?.profile, data?.organizations]);
+    return () => request.current?.abort();
+  }, [load, identity, signature, organizationPending]);
+  const campus = loadedCampus && { ...loadedCampus, progress: data?.campus_progress ?? loadedCampus.progress };
   if (error)
     return (
       <section className="sw-card" role="alert">
@@ -79,12 +94,12 @@ export function Campus({
         </button>
       </section>
     );
-  if (!campus || !data) return <p aria-busy="true">Loading campus…</p>;
+  if (!campus || !data) return <p aria-busy="true">Bringing your campus workspace together…</p>;
   const org = data.organizations?.find((o) => o.type === "university");
   if (mode === "student")
     return (
       <>
-        <StudentUniversity />
+        <StudentUniversity organizations={campus.organizations} />
         {campus.matching_domains
           .filter(
             (d) =>
@@ -245,6 +260,7 @@ export function Campus({
                     setInviteLink(
                       `${window.location.origin}/invite/${r.token}`,
                     );
+                      return r;
                   }}
                 />
                 {inviteLink && (
@@ -293,7 +309,7 @@ export function Campus({
                 )}
               </section>
               {mode === "students" && (
-                <div className="sw-card mt-5">
+                <WorkspaceSection needs={["campus_progress"]}><div className="sw-card mt-5">
                   <h2 className="sw-section">
                     {campus.progress.length} enrolled students
                   </h2>
@@ -337,7 +353,7 @@ export function Campus({
                         </article>
                       ))}
                   </div>
-                </div>
+                </div></WorkspaceSection>
               )}
               <section className="sw-card mt-5">
                 <h2 className="sw-section">Connection history</h2>

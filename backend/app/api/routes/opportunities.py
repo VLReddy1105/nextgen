@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query
 from app.api.dependencies import Student, Current
 from app.schemas.actions import Toggle
 from app.services.catalog import catalog, one
+from app.services.concurrency import gather
 
 router = APIRouter(prefix="/api/v1/opportunities", tags=["opportunities"])
 
@@ -52,19 +53,15 @@ async def listing(
 @router.get("/{id}")
 async def detail(id: UUID, current: Current):
     record = await one(current.repo, "opportunities", id)
-    organization = await one(current.repo, "organizations", record["organization_id"])
+    organization, applied, saved = await gather(
+        one(current.repo, "organizations", record["organization_id"]),
+        current.repo.rows("applications", student_id=f"eq.{current.id}", opportunity_id=f"eq.{id}"),
+        current.repo.rows("saved_opportunities", user_id=f"eq.{current.id}", opportunity_id=f"eq.{id}"),
+    )
     record["organization"] = organization["name"]
     record["can_manage"] = record["created_by"] == current.id
-    record["applied"] = bool(
-        await current.repo.rows(
-            "applications", student_id=f"eq.{current.id}", opportunity_id=f"eq.{id}"
-        )
-    )
-    record["saved"] = bool(
-        await current.repo.rows(
-            "saved_opportunities", user_id=f"eq.{current.id}", opportunity_id=f"eq.{id}"
-        )
-    )
+    record["applied"] = bool(applied)
+    record["saved"] = bool(saved)
     return record
 
 

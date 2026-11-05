@@ -38,6 +38,7 @@ import "./student.css";
 // Display context only, supplied by the authoritative server layout. API access
 // still validates the session and role independently on every request.
 const VerifiedShellRole = createContext<string | null>(null);
+const BeginSignout = createContext<(() => void) | null>(null);
 
 const links = [
   { key: "overview", name: "Overview", icon: LayoutDashboard },
@@ -193,6 +194,7 @@ function AccountMenu({
 }) {
   const { data } = useWorkspace();
   const serverRole = useContext(VerifiedShellRole);
+  const beginSignout = useContext(BeginSignout);
   return (
     <WorkspacePopover
       onNavigate={onNavigate}
@@ -231,7 +233,14 @@ function AccountMenu({
           {label}
         </Link>
       ))}
-      <form action="/auth/signout" method="post">
+      <form action="/auth/signout" method="post" onSubmit={(event) => {
+        if (!beginSignout) return;
+        // Submit the same native POST before unmounting its form. The server
+        // still signs out and returns its existing 303 redirect.
+        event.preventDefault();
+        event.currentTarget.submit();
+        beginSignout();
+      }}>
         <button className="w-full rounded-lg px-3 py-2 text-left text-red-700 hover:bg-red-50">
           Logout
         </button>
@@ -408,8 +417,8 @@ function Sidebar({
 function ContextPanel() {
   const { data } = useWorkspace();
   if (!data) return null;
-  if (data.pending?.length) return <aside role="status" aria-busy="true" className="sw-card">Loading workspace context…</aside>;
   if (data.profile.primary_role !== "student") return <RoleContext />;
+  if (data.pending?.some((key) => ["events", "sessions", "applications", "projects", "opportunities"].includes(key))) return <aside role="status" aria-busy="true" className="sw-card">Preparing your schedule…</aside>;
   const now = new Date(),
     today = now.toDateString();
   const schedule = [
@@ -698,6 +707,7 @@ export function StudentShell(props: {
 }) {
   const router = useRouter();
   const [sessionChanged, setSessionChanged] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   useEffect(() => {
     const { data: { subscription } } = createSupabaseBrowserClient().auth.onAuthStateChange(
       (event, session) => {
@@ -713,12 +723,15 @@ export function StudentShell(props: {
     );
     return () => subscription.unsubscribe();
   }, [props.identity, router]);
+  if (signingOut) return <p role="status">Signing you out…</p>;
   if (sessionChanged) return <p role="status">Updating your session…</p>;
   return (
+    <BeginSignout.Provider value={() => setSigningOut(true)}>
     <VerifiedShellRole.Provider value={props.role || null}>
-    <WorkspaceProvider progressive={props.role === "student"} compactNotifications={!!props.role}>
+    <WorkspaceProvider progressive={!!props.role} compactNotifications={!!props.role}>
       <StudentWorkspaceFrame {...props} />
     </WorkspaceProvider>
     </VerifiedShellRole.Provider>
+    </BeginSignout.Provider>
   );
 }
